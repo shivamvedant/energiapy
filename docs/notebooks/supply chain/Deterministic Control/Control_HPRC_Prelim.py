@@ -457,7 +457,6 @@ def fix_design_variables(model2fix: ConcreteModel, design_model: ConcreteModel):
         fix(model.Cap_F, model2fix.Cap_F)
 
     elif isinstance(design_model, dict):
-
         def fix_dict(var, dict):
             for i in list(var.keys()):
                 if dict[var.name][i] is None:
@@ -479,8 +478,6 @@ def fix_variables(model2fix: ConcreteModel, current_time_idx: tuple, initial_dic
     states = ['P', 'B', 'C', 'S', 'R', 'Inv', 'P_m', 'P_material_m', 'Cap_P', 'Cap_S', 'Capex_process', 'Capex_storage',
               'X_F', 'Cap_F', 'Exp', 'Capex_transport', 'X_P', 'X_S', 'X_P_m', 'Cap_P_m', 'X_P_mm', 'Demand_penalty',
               'Demand_penalty_cost']
-    # states = ['P', 'B', 'C', 'S', 'R', 'Inv', 'P_m', 'P_material_m', 'Cap_P', 'Cap_S', 'X_F', 'Cap_F', 'Exp', 'X_P',
-    #           'X_S', 'X_P_m', 'Cap_P_m', 'X_P_mm', 'Demand_penalty', 'Demand_penalty_cost']
 
     model2fix_vars = {v.name: v for v in model2fix.component_objects(Var) if v.name in states}
 
@@ -586,8 +583,6 @@ if __name__ == '__main__':
     states = ['P', 'B', 'C', 'S', 'R', 'Inv', 'P_m', 'P_material_m', 'Cap_P', 'Cap_S', 'Capex_process', 'Capex_storage',
               'X_F', 'Cap_F', 'Exp', 'Capex_transport', 'X_P', 'X_S', 'X_P_m', 'Cap_P_m', 'X_P_mm', 'Demand_penalty',
               'Demand_penalty_cost']
-    # states = ['P', 'B', 'C', 'S', 'R', 'Inv', 'P_m', 'P_material_m', 'Cap_P', 'Cap_S', 'X_F', 'Cap_F', 'Exp', 'X_P',
-    #           'X_S', 'X_P_m', 'Cap_P_m', 'X_P_mm', 'Demand_penalty', 'Demand_penalty_cost']
     for v1 in model_record[list(model_record.keys())[-1]].component_objects(Var, active=True):
         vname = v1.name
         if vname in states:
