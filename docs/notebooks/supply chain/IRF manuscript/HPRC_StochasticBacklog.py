@@ -21,7 +21,6 @@ from pyomo.environ import value as pyoval
 from pyomo.environ import Var, Constraint, NonNegativeReals
 
 design_planning_horizons = 1
-# design_exec_scenarios = 52
 design_scale_factor = 1
 capacity_scale_factor = 10
 
@@ -189,59 +188,59 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame()):
     truck_cap75 = 80 * design_scale_factor * capacity_scale_factor
 
     plane_cap15 = 30 * design_scale_factor
-    plane_cap65 = 40 * design_scale_factor * capacity_scale_factor
+    # plane_cap65 = 40 * design_scale_factor * capacity_scale_factor
 
     truck_capmin = 0.01
     plane_capmin = 0.01
 
     truck12 = Transport(name='truck12', resources={com1_loc1_out}, trans_max=truck_cap12,
                         label='Truck from location 1 to 2', capex=0.5 / design_scale_factor, vopex=0.05,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck21 = Transport(name='truck21', resources={com1_loc2_out}, trans_max=truck_cap12, label='Truck from location 2 to 1', capex=0.0001, vopex=0.05, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck21 = Transport(name='truck21', resources={com1_loc2_out}, trans_max=truck_cap12, label='Truck from location 2 to 1', capex=0.0001, vopex=0.05, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck13 = Transport(name='truck13', resources={com1_loc1_out}, trans_max=truck_cap13,
                         label='Truck from location 1 to 3', capex=0.3 / design_scale_factor, vopex=0.03,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck31 = Transport(name='truck31', resources={com1_loc3_out}, trans_max=truck_cap13, label='Truck from location 3 to 1', capex=0.0001, vopex=0.03, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck31 = Transport(name='truck31', resources={com1_loc3_out}, trans_max=truck_cap13, label='Truck from location 3 to 1', capex=0.0001, vopex=0.03, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck24 = Transport(name='truck24', resources={com1_loc2_out}, trans_max=truck_cap24,
                         label='Truck from location 2 to 4', capex=0.5 / design_scale_factor, vopex=0.05,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck42 = Transport(name='truck42', resources={com1_loc4_out}, trans_max=truck_cap24, label='Truck from location 4 to 2', capex=0.0001, vopex=0.05, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck42 = Transport(name='truck42', resources={com1_loc4_out}, trans_max=truck_cap24, label='Truck from location 4 to 2', capex=0.0001, vopex=0.05, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck25 = Transport(name='truck25', resources={com1_loc2_out}, trans_max=truck_cap25,
                         label='Truck from location 2 to 5', capex=0.3 / design_scale_factor, vopex=0.03,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck52 = Transport(name='truck52', resources={com1_loc5_out}, trans_max=truck_cap25, label='Truck from location 5 to 2', capex=0.0001, vopex=0.03, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck52 = Transport(name='truck52', resources={com1_loc5_out}, trans_max=truck_cap25, label='Truck from location 5 to 2', capex=0.0001, vopex=0.03, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck34 = Transport(name='truck34', resources={com1_loc3_out}, trans_max=truck_cap34,
                         label='Truck from location 3 to 4', capex=0.2 / design_scale_factor, vopex=0.02,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck43 = Transport(name='truck43', resources={com1_loc4_out}, trans_max=truck_cap34, label='Truck from location 4 to 3', capex=0.0001, vopex=0.02, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck43 = Transport(name='truck43', resources={com1_loc4_out}, trans_max=truck_cap34, label='Truck from location 4 to 3', capex=0.0001, vopex=0.02, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck45 = Transport(name='truck45', resources={com1_loc4_out}, trans_max=truck_cap45,
                         label='Truck from location 4 to 5', capex=1 / design_scale_factor, vopex=0.1,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck54 = Transport(name='truck54', resources={com1_loc5_out}, trans_max=truck_cap45, label='Truck from location 5 to 4', capex=0.0001, vopex=0.1, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck54 = Transport(name='truck54', resources={com1_loc5_out}, trans_max=truck_cap45, label='Truck from location 5 to 4', capex=0.0001, vopex=0.1, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck47 = Transport(name='truck47', resources={com1_loc4_out}, trans_max=truck_cap47,
                         label='Truck from location 4 to 7', capex=0.4 / design_scale_factor, vopex=0.04,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck74 = Transport(name='truck74', resources={com1_loc7_out}, trans_max=truck_cap47, label='Truck from location 7 to 4', capex=0.0001, vopex=0.04, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck74 = Transport(name='truck74', resources={com1_loc7_out}, trans_max=truck_cap47, label='Truck from location 7 to 4', capex=0.0001, vopex=0.04, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck64 = Transport(name='truck64', resources={com1_loc6_out}, trans_max=truck_cap64,
                         label='Truck from location 6 to 4', capex=0.5 / design_scale_factor, vopex=0.05,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck46 = Transport(name='truck46', resources={com1_loc4_out}, trans_max=truck_cap64, label='Truck from location 4 to 6', capex=0.0001, vopex=0.05, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck46 = Transport(name='truck46', resources={com1_loc4_out}, trans_max=truck_cap64, label='Truck from location 4 to 6', capex=0.0001, vopex=0.05, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     truck75 = Transport(name='truck75', resources={com1_loc7_out}, trans_max=truck_cap75,
                         label='Truck from location 7 to 5', capex=0.4 / design_scale_factor, vopex=0.04,
-                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
-    # truck57 = Transport(name='truck57', resources={com1_loc5_out}, trans_max=truck_cap75, label='Truck from location 5 to 7', capex=0.0001, vopex=0.04, trans_min=truck_capmin, speed=50, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
+                        trans_min=truck_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=20)
+    # truck57 = Transport(name='truck57', resources={com1_loc5_out}, trans_max=truck_cap75, label='Truck from location 5 to 7', capex=0.0001, vopex=0.04, trans_min=truck_capmin, speed=20, varying=[VaryingTransport.DETERMINISTIC_CAPACITY])
 
     plane15 = Transport(name='plane15', resources={com1_loc1_out}, trans_max=plane_cap15,
                         label='Plane from location 1 to 5', capex=3 / design_scale_factor, vopex=0.5,
-                        trans_min=plane_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=100)
+                        trans_min=plane_capmin, varying=[VaryingTransport.DETERMINISTIC_CAPACITY], speed=50)
 
     # plane65 = Transport(name='plane65', resources={com1_loc6_out}, trans_max=plane_cap65,
     #                     label='Plane from location 6 to 5', capex=3 / design_scale_factor, vopex=0.5,
@@ -327,28 +326,28 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame()):
     # ======================================================================================================================
 
     daily_demand = 100 * design_scale_factor
-    demand_penalty = 25
-    backlog_penalty = 10
+    demand_penalty = 75
+    backlog_penalty = 50
 
     demand_dict = {i: {com1_sold: daily_demand} if i == loc5 else {com1_sold: 0} for i in locset}
     demand_penalty_dict = {i: {com1_sold: demand_penalty} if i == loc5 else {com1_sold: 0} for i in locset}
     backlog_penalty_dict = {i: {com1_sold: backlog_penalty} if i == loc5 else {com1_sold: 0} for i in locset}
+    # backlog_zero = {}
 
-    scenario = Scenario(name=f'design scenario', scales=scales, scheduling_scale_level=2, network_scale_level=0,
+    scenario = Scenario(name=f'backlog design scenario NCL', scales=scales, scheduling_scale_level=2, network_scale_level=0,
                         purchase_scale_level=2, availability_scale_level=1, demand_scale_level=2,
                         backlog_penalty_scale_level=2,
                         capacity_scale_level=1, network=network, demand=demand_dict, demand_penalty=demand_penalty_dict,
                         backlog_penalty=backlog_penalty_dict,
-                        label='Design Scenario', annualization_factor=design_annualization_factor)
+                        label='Design Scenario with Backlog without Continual Learning', annualization_factor=design_annualization_factor)
 
     if scen_df.empty:
         # ======================================================================================================================
         # Declare problem
         # ======================================================================================================================
 
-        backlog_zero = {loc5: {com1_sold: 34}}
+        # backlog_zero = {loc5: {com1_sold: 34}}
         problem_mincost = formulate(scenario=scenario, demand_sign='eq', objective=Objective.COST_W_DEMAND_PENALTY,
-                                    backlog_zero=backlog_zero,
                                     constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
                                                  Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
                                                  Constraints.NETWORK})
