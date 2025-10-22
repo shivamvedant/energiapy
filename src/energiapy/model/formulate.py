@@ -301,7 +301,8 @@ def formulate(scenario: Scenario, constraints: Set[Constraints] = None, objectiv
               gwp_reduction_pct: float = None, model_class: ModelClass = ModelClass.MIP, objective_resource: Resource = None,
               inventory_zero: Dict[Location, Dict[Tuple[Process, Resource], float]] = None,
               backlog_zero: Dict[Location, Dict[Resource, float]] = None,
-              demand_sign: str = 'geq') -> ConcreteModel:
+              demand_sign: str = 'geq',
+              initial_design_dict:dict = None) -> ConcreteModel:
     """formulates a model. Constraints need to be declared in order
 
     Args:
@@ -942,12 +943,13 @@ def formulate(scenario: Scenario, constraints: Set[Constraints] = None, objectiv
         if Constraints.PRESERVE_NETWORK in constraints:
 
             constraint_preserve_capacity_facility(
-                instance=instance, location_process_dict=scenario.location_process_dict, network_scale_level=scenario.network_scale_level)
+                instance=instance, location_process_dict=scenario.location_process_dict, network_scale_level=scenario.network_scale_level, initial_design_dict=initial_design_dict)
 
             constraint_preserve_capacity_transport(
-                instance=instance, transport_avail_dict=scenario.transport_avail_dict, network_scale_level=scenario.network_scale_level)
+                instance=instance, transport_avail_dict=scenario.transport_avail_dict, network_scale_level=scenario.network_scale_level, initial_design_dict=initial_design_dict)
 
-            constraint_preserve_capacity_storage(instance=instance, location_resource_dict=scenario.location_resource_dict, network_scale_level=scenario.network_scale_level)
+            constraint_preserve_capacity_storage(
+                instance=instance, location_resource_dict=scenario.location_resource_dict, network_scale_level=scenario.network_scale_level, initial_design_dict=initial_design_dict)
 
         if Constraints.MODE in constraints:
             generate_mode_vars(

@@ -1,6 +1,7 @@
 import sys
 sys.path.append('/scratch/user/shivam.vedant')
 sys.path.append('/scratch/user/shivam.vedant/src')
+# sys.path.append('../../../../src')
 
 import pandas
 import time
@@ -37,7 +38,7 @@ print(f"fill_rate: {fill_rate}")
 print(f"Type: {type(fill_rate)}")
 
 
-def build_design_model(eps: float, scen_df=pandas.DataFrame()):
+def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict:dict=None):
     default_df = pandas.DataFrame(data=[1] * schedule_exec_scenarios)
 
     # Define temporal scales
@@ -350,7 +351,8 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame()):
         problem_mincost = formulate(scenario=scenario, demand_sign='eq', objective=Objective.COST_W_DEMAND_PENALTY,
                                     constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
                                                  Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
-                                                 Constraints.NETWORK})
+                                                 Constraints.NETWORK, Constraints.PRESERVE_NETWORK},
+                                    initial_design_dict=init_des_dict)
 
         # demand = scenario.demand
         # if isinstance(demand, dict):
@@ -379,17 +381,17 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame()):
     else:
         return scenario
 
-def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0):
-    scenario = build_design_model(scen_df=scen_df, eps=eps)
+def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_dict: dict = None):
+    scenario = build_design_model(scen_df=scen_df, eps=eps, init_des_dict = init_des_dict)
     # ======================================================================================================================
     # Declare problem
     # ======================================================================================================================
-    backlog_zero = {'loc5': {'com1_sold': 34}}
+    # backlog_zero = {'loc5': {'com1_sold': 34}}
     problem_mincost = formulate(scenario=scenario, demand_sign='eq', objective=Objective.COST_W_DEMAND_PENALTY,
-                                    backlog_zero=backlog_zero,
+                                    initial_design_dict=init_des_dict,
                                     constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
                                                  Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
-                                                 Constraints.NETWORK})
+                                                 Constraints.NETWORK, Constraints.PRESERVE_NETWORK})
 
     # demand = scenario.demand
     # if isinstance(demand, dict):
@@ -466,10 +468,11 @@ if __name__ =='__main__':
     with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_ncl.pkl','wb') as file:
         pickle.dump(output_dict,file)
 
-    exPen = 0
+    exPen, exBacklogPen = 0, 0
     for scen in load_scenario_names:
         model = getattr(ef_UI.ef, scen)
         exPen += pyoval(model.Demand_penalty_network[('com1_sold', 0)]) * load_scenario_dict[scen]['prob']
+        exBacklogPen += pyoval(model.Demand_backlog_cost_network[('com1_sold', 0)]) * load_scenario_dict[scen]['prob']
 
     fsc = pyoval(getattr(ef_UI.ef, load_scenario_names[0]).first_stage_cost)
 
@@ -479,7 +482,7 @@ if __name__ =='__main__':
 
     final_results_dict = {'Expected Cost UI': exCost_UI,
                           'First Stage Cost': fsc,
-                          'Total Expected Penalty Cost': exPen,
+                          'Total Expected Penalty Cost': exPen + exBacklogPen,
                           'Execution Time': start_time - end_time}
 
     with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_ncl.pkl", 'wb') as file:

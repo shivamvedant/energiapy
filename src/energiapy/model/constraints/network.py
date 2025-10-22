@@ -206,7 +206,7 @@ def constraint_min_capacity_facility(instance: ConcreteModel, location_process_d
     return instance.constraint_min_capacity_facility
 
 
-def constraint_preserve_capacity_facility(instance: ConcreteModel, location_process_dict: dict = None, network_scale_level: int = 0) -> Constraint:
+def constraint_preserve_capacity_facility(instance: ConcreteModel, location_process_dict: dict = None, network_scale_level: int = 0, initial_design_dict: dict = None) -> Constraint:
     """Ensures that capacity over network scale is not reduced
     Essentially, the capacity of a facility is preserved
 
@@ -222,6 +222,8 @@ def constraint_preserve_capacity_facility(instance: ConcreteModel, location_proc
     if location_process_dict is None:
         location_process_dict = dict()
 
+    # init_dict = init_dict or dict()
+
     scales = scale_list(instance=instance,
                         scale_levels=network_scale_level + 1)
 
@@ -229,15 +231,21 @@ def constraint_preserve_capacity_facility(instance: ConcreteModel, location_proc
         instance=instance, scale_levels=network_scale_level + 1)
 
     def preserve_capacity_facility_rule(instance, location, process, *scale_list):
-        if location_process_dict is not None:
-            if process in location_process_dict[location]:
-                if scale_list[:network_scale_level + 1] != scale_iter[0]:
-                    return instance.Cap_P[location, process, scale_list[:network_scale_level + 1]] >= instance.Cap_P[location, process, scale_iter[scale_iter.index(
-                        scale_list[:network_scale_level + 1]) - 1]]
+        if scale_list in scale_iter:
+            if location_process_dict is not None:
+                if process in location_process_dict[location]:
+                    if scale_list[:network_scale_level + 1] != scale_iter[0]:
+                        return instance.Cap_P[location, process, scale_list[:network_scale_level + 1]] >= instance.Cap_P[location, process, scale_iter[scale_iter.index(
+                            scale_list[:network_scale_level + 1]) - 1]]
+                    elif initial_design_dict and f"Cap_P[{location},{process},{','.join(map(str, scale_list[:network_scale_level + 1]))}]" in initial_design_dict:
+                        return (instance.Cap_P[location, process, scale_list[:network_scale_level + 1]] >=
+                                initial_design_dict[f"Cap_P[{location},{process},{','.join(map(str, scale_list[:network_scale_level + 1]))}]"])
+                    else:
+                        return Constraint.Skip
                 else:
-                    return Constraint.Skip
+                    return instance.Cap_P[location, process, scale_list[:network_scale_level + 1]] == 0
             else:
-                return instance.Cap_P[location, process, scale_list[:network_scale_level + 1]] == 0
+                return Constraint.Skip
         else:
             return Constraint.Skip
 
@@ -250,7 +258,7 @@ def constraint_preserve_capacity_facility(instance: ConcreteModel, location_proc
 
 
 
-def constraint_preserve_capacity_transport(instance: ConcreteModel, transport_avail_dict: dict = None, network_scale_level: int = 0) -> Constraint:
+def constraint_preserve_capacity_transport(instance: ConcreteModel, transport_avail_dict: dict = None, network_scale_level: int = 0, initial_design_dict : dict = None) -> Constraint:
     """Ensures that capacity over network scale is not reduced
     Essentially, the capacity of a transport mode is preserved
 
@@ -273,14 +281,20 @@ def constraint_preserve_capacity_transport(instance: ConcreteModel, transport_av
         instance=instance, scale_levels=network_scale_level + 1)
 
     def preserve_capacity_transport_rule(instance, source, sink, transport, *scale_list):
-        if transport in transport_avail_dict[(source, sink)]:
-            if scale_list[:network_scale_level + 1] != scale_iter[0]:
-                return instance.Cap_F[source, sink, transport, scale_list[:network_scale_level + 1]] >= instance.Cap_F[source, sink, transport, scale_iter[scale_iter.index(
-                    scale_list[:network_scale_level + 1]) - 1]]
+        if scale_list in scale_iter:
+            if transport in transport_avail_dict[(source, sink)]:
+                if scale_list[:network_scale_level + 1] != scale_iter[0]:
+                    return instance.Cap_F[source, sink, transport, scale_list[:network_scale_level + 1]] >= instance.Cap_F[source, sink, transport, scale_iter[scale_iter.index(
+                        scale_list[:network_scale_level + 1]) - 1]]
+                elif initial_design_dict and f"Cap_F[{source},{sink},{transport},{','.join(map(str, scale_list[:network_scale_level + 1]))}]" in initial_design_dict:
+                    return (instance.Cap_F[source, sink, transport, scale_list[:network_scale_level + 1]] >=
+                            initial_design_dict[f"Cap_F[{source},{sink},{transport},{','.join(map(str, scale_list[:network_scale_level + 1]))}]"])
+                else:
+                    return Constraint.Skip
             else:
-                return Constraint.Skip
+                return instance.Cap_F[source, sink, transport, scale_list[:network_scale_level + 1]] == 0
         else:
-            return instance.Cap_F[source, sink, transport, scale_list[:network_scale_level + 1]] == 0
+            return Constraint.Skip
 
     instance.constraint_preserve_capacity_transport = Constraint(
         instance.sources, instance.sinks, instance.transports, *
@@ -289,7 +303,7 @@ def constraint_preserve_capacity_transport(instance: ConcreteModel, transport_av
     constraint_latex_render(preserve_capacity_transport_rule)
     return instance.constraint_preserve_capacity_transport
 
-def constraint_preserve_capacity_storage(instance: ConcreteModel, location_resource_dict:dict = None, network_scale_level: int = 0) -> Constraint:
+def constraint_preserve_capacity_storage(instance: ConcreteModel, location_resource_dict:dict = None, network_scale_level: int = 0, initial_design_dict:dict = None) -> Constraint:
     """Ensures that capacity over network scale is not reduced
     Essentially, the capacity of a storage facility is preserved
 
@@ -312,17 +326,24 @@ def constraint_preserve_capacity_storage(instance: ConcreteModel, location_resou
         instance=instance, scale_levels=network_scale_level + 1)
 
     def preserve_storage_capacity_rule(instance, location, resource_store, *scale_list):
-        if scale_list[:network_scale_level + 1] != scale_iter[0]:
-            if resource_store in location_resource_dict[location]:
-                return instance.Cap_S[location, resource_store, scale_list[:network_scale_level + 1]] >= instance.Cap_S[location, resource_store, scale_iter[scale_iter.index(
-                    scale_list[:network_scale_level + 1]) - 1]]
+        if scale_list in scale_iter:
+            if scale_list[:network_scale_level + 1] != scale_iter[0]:
+                if resource_store in location_resource_dict[location]:
+                    return instance.Cap_S[location, resource_store, scale_list[:network_scale_level + 1]] >= instance.Cap_S[location, resource_store, scale_iter[scale_iter.index(
+                        scale_list[:network_scale_level + 1]) - 1]]
+                else:
+                    return instance.Cap_S[location, resource_store, scale_list[:network_scale_level + 1]] == 0
+            elif initial_design_dict and f'Cap_S[{location},{resource_store},{",".join(map(str, scale_list[:network_scale_level + 1]))}]' in initial_design_dict:
+                return (instance.Cap_S[location, resource_store, scale_list[:network_scale_level + 1]] >=
+                        initial_design_dict[
+                            f'Cap_S[{location},{resource_store},{",".join(map(str, scale_list[:network_scale_level + 1]))}]'])
             else:
                 return Constraint.Skip
         else:
             return Constraint.Skip
 
-    instance.constraint_preserve_storage_capacity = Constraint(
+    instance.constraint_preserve_capacity_storage = Constraint(
         instance.locations, instance.resources_store, *scales, rule=preserve_storage_capacity_rule,
         doc='preserves the storage capacity over network scale')
     constraint_latex_render(preserve_storage_capacity_rule)
-    return instance.constraint_preserve_storage_capacity
+    return instance.constraint_preserve_capacity_storage
