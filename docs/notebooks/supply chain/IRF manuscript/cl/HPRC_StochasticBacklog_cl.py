@@ -1,7 +1,7 @@
 import sys
 sys.path.append('/scratch/user/shivam.vedant')
 sys.path.append('/scratch/user/shivam.vedant/src')
-# sys.path.append('../../../../src')
+# sys.path.append('../../../../../src')
 
 import pandas
 import time
@@ -432,7 +432,7 @@ if __name__ =='__main__':
     with open('backlog_scen_dict_cl.pkl', 'rb') as file:
         load_scenario_dict = pickle.load(file)
 
-    with open('ssoln_32_00_Backlog_ncl.pkl','rb') as file:
+    with open('../ncl/ssoln_32_00_Backlog_ncl.pkl', 'rb') as file:
         load_initial_design_dict = pickle.load(file)
 
     load_scenario_names = list(load_scenario_dict.keys())
