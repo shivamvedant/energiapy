@@ -1017,7 +1017,7 @@ def formulate(scenario: Scenario, constraints: Set[Constraints] = None, objectiv
                 instance=instance, network_scale_level=scenario.network_scale_level,
                 gwp_reduction_pct=gwp_reduction_pct, gwp=gwp)
 
-        if objective == Objective.COST_W_DEMAND_PENALTY or objective == Objective.TIME_TO_RECOVER:
+        if objective == Objective.COST_W_DEMAND_PENALTY:
             generate_demand_vars(
                 instance=instance, scale_level=scenario.demand_scale_level)
 
@@ -1053,14 +1053,55 @@ def formulate(scenario: Scenario, constraints: Set[Constraints] = None, objectiv
 
             constraint_demand_penalty_cost_network(instance=instance, network_scale_level=scenario.network_scale_level)
 
-            if objective == Objective.TIME_TO_RECOVER:
-                if not isBacklog:
-                    raise ValueError('NOPE!!')
-                else:
-                    objective_time_to_recover(instance=instance, network_scale_level=scenario.network_scale_level)
-            else:
-                objective_cost_w_demand_penalty(instance=instance,
+            objective_cost_w_demand_penalty(instance=instance,
                                             constraints=constraints, network_scale_level=scenario.network_scale_level, isBacklog=isBacklog)
+
+        elif objective == Objective.TIME_TO_RECOVER:
+            if not isBacklog:
+                raise ValueError('NOPE!! Need backlog constraints to work this in')
+            else:
+                generate_demand_vars(instance=instance, scale_level=scenario.demand_scale_level)
+                generate_backlog_vars(instance=instance)
+                generate_demand_backlog_vars(instance=instance)
+
+                constraint_backlog(instance=instance, demand_scale_level=scenario.demand_scale_level,
+                                   scheduling_scale_level=scenario.scheduling_scale_level,
+                                   location_resource_dict=scenario.location_resource_dict, backlog_zero=backlog_zero)
+                constraint_backlog_total_discharge(instance=instance, demand_scale_level=scenario.demand_scale_level,
+                                                   location_resource_dict=scenario.location_resource_dict,
+                                                   scheduling_scale_level=scenario.scheduling_scale_level)
+                constraint_backlog_penalty_cost(instance=instance, backlog_penalty=backlog_penalty,
+                                                backlog_penalty_factor=scenario.backlog_penalty_factor,
+                                                demand_scale_level=scenario.demand_scale_level,
+                                                backlog_penalty_scale_level=scenario.backlog_penalty_scale_level)
+                constraint_backlog_penalty_cost_location(instance=instance,
+                                                         demand_scale_level=scenario.demand_scale_level,
+                                                         network_scale_level=scenario.network_scale_level)
+                constraint_backlog_penalty_cost_network(instance=instance,
+                                                        network_scale_level=scenario.network_scale_level)
+
+                constraint_demand_penalty(instance=instance, demand_scale_level=scenario.demand_scale_level,
+                                          scheduling_scale_level=scenario.scheduling_scale_level, demand=demand,
+                                          isBacklog=isBacklog,
+                                          demand_factor=scenario.demand_factor,
+                                          location_resource_dict=scenario.location_resource_dict, sign=demand_sign)
+
+                constraint_demand_penalty_location(
+                    instance=instance, cluster_wt=scenario.cluster_wt, network_scale_level=scenario.network_scale_level,
+                    demand_scale_level=scenario.demand_scale_level)
+
+                constraint_demand_penalty_network(instance=instance, network_scale_level=scenario.network_scale_level)
+
+                constraint_demand_penalty_cost(instance=instance, demand_scale_level=scenario.demand_scale_level,
+                                               demand_penalty_dict=scenario.demand_penalty,
+                                               demand_penalty_factor=scenario.demand_penalty_factor)
+
+                constraint_demand_penalty_cost_location(instance=instance, demand_scale_level=scenario.demand_scale_level,
+                                                        network_scale_level=scenario.network_scale_level)
+
+                constraint_demand_penalty_cost_network(instance=instance, network_scale_level=scenario.network_scale_level)
+
+                objective_time_to_recover(instance=instance, network_scale_level=scenario.network_scale_level)
 
         elif objective == Objective.PROFIT_W_DEMAND_PENALTY:
             generate_demand_vars(

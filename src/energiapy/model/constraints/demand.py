@@ -357,7 +357,6 @@ def constraint_demand_penalty(instance: ConcreteModel, demand: Union[dict, float
         instance.constraint_demand_penalty = Constraint(
             instance.sinks, instance.resources_demand, *scales, rule=demand_penalty_rule,
             doc='specific demand for resources with penalty')
-
     else:
         instance.constraint_demand_penalty = Constraint(
             instance.locations, instance.resources_demand, *scales, rule=demand_penalty_rule,

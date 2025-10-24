@@ -538,7 +538,7 @@ if __name__ == '__main__':
     disruption_dict = dict()
     disruption_dict[('loc2', 'com1_process')] = capacity_factor_dict
 
-    close_loop_results, end_result, end_model, end_scenario = supply_chain_controller(time_ind=scale_iter_list, norm_varying_dict=disruption_dict, c_horizon=10, p_horizon=10,
+    close_loop_results, end_result, end_model, end_scenario = supply_chain_controller(time_ind=scale_iter_list, norm_varying_dict=disruption_dict, p_horizon=20,
                                                                                       design_model=load_output_dict[design_scen])
 
     scen_final, model_final = build_schedule_model(start_time=scale_iter_list[0], end_time=scale_iter_list[-1],
