@@ -522,7 +522,7 @@ if __name__ == '__main__':
     start_idx = 0
     end_idx = len(scale_iter_list) - 1
 
-    with open(f'../ncl/output_32_00_Backlog_ncl.pkl', 'rb') as file:
+    with open(f'../cl/output_128_00_Backlog_cl.pkl', 'rb') as file:
         load_output_dict = pickle.load(file)
 
     design_scen = list(load_output_dict.keys())[0]
@@ -561,5 +561,5 @@ if __name__ == '__main__':
 
     results_final = solve(scenario=scen_final, instance=model_final, solver='gurobi', name='MILP_final')
 
-    with open(f'ControlResults_Backlog.pkl', 'wb') as file:
+    with open(f'cl_ControlResults_Backlog.pkl', 'wb') as file:
         pickle.dump(results_final, file)
