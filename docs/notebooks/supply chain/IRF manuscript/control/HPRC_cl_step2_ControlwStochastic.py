@@ -527,13 +527,17 @@ if __name__ == '__main__':
 
     design_scen = list(load_output_dict.keys())[0]
 
-    cap_dis_t_idx = 14  # Disruption starts here
+    cap_dis_t_idx = 40  # Disruption starts here
     cap_early_warning = 1  # Information about the disruption is relayed to the model
     capacity_factor_dict = {
         k: [1] * (cap_dis_t_idx - 1) + [int(i < cap_dis_t_idx - cap_early_warning - 1)] * (
                     schedule_exec_scenarios - cap_dis_t_idx + 1) for i in range(schedule_exec_scenarios)
         for k in range(i * schedule_time_intervals, (i + 1) * schedule_time_intervals)
     }
+
+    truck_dis_t_idx = 14
+    truck_early_warning = 2
+
 
     disruption_dict = dict()
     disruption_dict[('loc2', 'com1_process')] = capacity_factor_dict

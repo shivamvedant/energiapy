@@ -429,10 +429,10 @@ def design_scenario_creator(scen_name, **kwargs):
 
 if __name__ =='__main__':
 
-    with open('backlog_scen_dict_cl.pkl', 'rb') as file:
+    with open('backlog_scen_dict_cl_step2.pkl', 'rb') as file:
         load_scenario_dict = pickle.load(file)
 
-    with open('../ncl/ssoln_32_00_Backlog_ncl.pkl', 'rb') as file:
+    with open('../cl/ssoln_128_00_Backlog_cl.pkl', 'rb') as file:
         load_initial_design_dict = pickle.load(file)
 
     load_scenario_names = list(load_scenario_dict.keys())
@@ -458,7 +458,7 @@ if __name__ =='__main__':
     exCost_UI = ef_UI.get_objective_value()
     ssoln_UI = ef_UI.get_root_solution()
 
-    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl", "wb") as file:
+    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl_step2.pkl", "wb") as file:
         pickle.dump(ssoln_UI, file)
 
     output_dict = dict()
@@ -469,7 +469,7 @@ if __name__ =='__main__':
         obj_dict = {'objective': model_obj[i]() for i in model_obj.keys()}
         output_dict[scen] ={**vars_dict, **obj_dict}
 
-    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl','wb') as file:
+    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl_step2.pkl','wb') as file:
         pickle.dump(output_dict,file)
 
     exPen, exBacklogPen = 0, 0
@@ -489,5 +489,5 @@ if __name__ =='__main__':
                           'Total Expected Penalty Cost': exPen + exBacklogPen,
                           'Execution Time': start_time - end_time}
 
-    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl", 'wb') as file:
+    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl_step2.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)
