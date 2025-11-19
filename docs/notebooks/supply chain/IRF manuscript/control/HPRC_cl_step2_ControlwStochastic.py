@@ -535,12 +535,26 @@ if __name__ == '__main__':
         for k in range(i * schedule_time_intervals, (i + 1) * schedule_time_intervals)
     }
 
-    truck_dis_t_idx = 14
+    truck_dis_start_idx = 14
+    truck_dis_end_idx = 26
     truck_early_warning = 2
 
+    prefix = [1] * (truck_dis_start_idx - 1)
+    normal_vec = prefix + [1] * (schedule_exec_scenarios - truck_dis_start_idx + 1)
+    drop_vec = prefix + [0.75] * (truck_dis_end_idx - truck_dis_start_idx + 1) \
+               + [1] * (schedule_exec_scenarios - truck_dis_end_idx)
+
+    threshold = truck_dis_start_idx - truck_early_warning - 1
+
+    truck_factor_dict = {
+        k: (normal_vec if i < threshold else drop_vec)
+        for i in range(schedule_exec_scenarios)
+        for k in range(i * schedule_time_intervals, (i + 1) * schedule_time_intervals)
+    }
 
     disruption_dict = dict()
     disruption_dict[('loc2', 'com1_process')] = capacity_factor_dict
+    disruption_dict[('truck45', 'com1_loc4_out')] = truck_factor_dict
 
     close_loop_results, end_result, end_model, end_scenario = supply_chain_controller(time_ind=scale_iter_list, norm_varying_dict=disruption_dict, p_horizon=20,
                                                                                       design_model=load_output_dict[design_scen])
