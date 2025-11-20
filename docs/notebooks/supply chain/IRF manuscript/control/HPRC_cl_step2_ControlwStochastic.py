@@ -527,16 +527,16 @@ if __name__ == '__main__':
 
     design_scen = list(load_output_dict.keys())[0]
 
-    cap_dis_t_idx = 40  # Disruption starts here
-    cap_early_warning = 1  # Information about the disruption is relayed to the model
-    capacity_factor_dict = {
-        k: [1] * (cap_dis_t_idx - 1) + [int(i < cap_dis_t_idx - cap_early_warning - 1)] * (
-                    schedule_exec_scenarios - cap_dis_t_idx + 1) for i in range(schedule_exec_scenarios)
-        for k in range(i * schedule_time_intervals, (i + 1) * schedule_time_intervals)
-    }
+    # cap_dis_t_idx = 40  # Disruption starts here
+    # cap_early_warning = 1  # Information about the disruption is relayed to the model
+    # capacity_factor_dict = {
+    #     k: [1] * (cap_dis_t_idx - 1) + [int(i < cap_dis_t_idx - cap_early_warning - 1)] * (
+    #                 schedule_exec_scenarios - cap_dis_t_idx + 1) for i in range(schedule_exec_scenarios)
+    #     for k in range(i * schedule_time_intervals, (i + 1) * schedule_time_intervals)
+    # }
 
-    truck_dis_start_idx = 14
-    truck_dis_end_idx = 26
+    truck_dis_start_idx = 27
+    truck_dis_end_idx = 39
     truck_early_warning = 2
 
     prefix = [1] * (truck_dis_start_idx - 1)
@@ -553,7 +553,7 @@ if __name__ == '__main__':
     }
 
     disruption_dict = dict()
-    disruption_dict[('loc2', 'com1_process')] = capacity_factor_dict
+    # disruption_dict[('loc2', 'com1_process')] = capacity_factor_dict
     disruption_dict[('truck45', 'com1_loc4_out')] = truck_factor_dict
 
     close_loop_results, end_result, end_model, end_scenario = supply_chain_controller(time_ind=scale_iter_list, norm_varying_dict=disruption_dict, p_horizon=20,
@@ -579,5 +579,5 @@ if __name__ == '__main__':
 
     results_final = solve(scenario=scen_final, instance=model_final, solver='gurobi', name='MILP_final')
 
-    with open(f'cl_ControlResults_Backlog.pkl', 'wb') as file:
+    with open(f'cl_step2_ControlResults_Backlog.pkl', 'wb') as file:
         pickle.dump(results_final, file)
