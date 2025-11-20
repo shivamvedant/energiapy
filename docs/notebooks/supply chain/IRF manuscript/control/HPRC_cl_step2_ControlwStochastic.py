@@ -560,8 +560,8 @@ if __name__ == '__main__':
                                                                                       design_model=load_output_dict[design_scen])
 
     scen_final, model_final = build_schedule_model(start_time=scale_iter_list[0], end_time=scale_iter_list[-1],
-                                                   scen_df=pandas.DataFrame(data={('loc2', 'com1_process'): disruption_dict[('loc2', 'com1_process')][
-                                                       list(disruption_dict[('loc2', 'com1_process')].keys())[-1]]}))
+                                                   scen_df=pandas.DataFrame(data={('truck45', 'com1_loc4_out'): disruption_dict[('truck45', 'com1_loc4_out')][
+                                                       list(disruption_dict[('truck45', 'com1_loc4_out')].keys())[-1]]}))
 
     states = {
         'P', 'B', 'C', 'S', 'R', 'Inv', 'P_m', 'P_material_m', 'Cap_P', 'Cap_S', 'Capex_process', 'Incidental_process',
