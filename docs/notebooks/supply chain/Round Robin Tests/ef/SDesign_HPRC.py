@@ -527,4 +527,3 @@ if __name__ == '__main__':
 
     with open(f"FD_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_final_results_HP.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)
-
