@@ -10,19 +10,14 @@ from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 import numpy as np
 import chaospy as cp
 import pickle
-import sympy as sp
 import time
-import pandas as pd
 import warnings
-from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from functools import partial
 import os
-import traceback
-from itertools import product
-from tqdm.auto import tqdm
+from scipy.stats import qmc
 
-## Case Study
-
+# Case Study
 # Bansal (2000) Process Example 1
 y_dict = {
     (0, 0, 0): 0.001,
@@ -46,6 +41,8 @@ theta_bounds_algo = mpqp_algorithm.combinatorial_parallel
 feas_algo_name = 'gp' if feasibility_algo.name in ['geometric_parallel', 'geometric'] else ('cb' if feasibility_algo in ['combinatorial', 'combinatorial_parallel'] else '')
 tb_algo_name = 'gp' if theta_bounds_algo.name in ['geometric_parallel', 'geometric'] else ('cb' if feasibility_algo in ['combinatorial', 'combinatorial_parallel'] else '')
 
+quad_method = 'smolyak'
+smolyak_level = 12
 def create_flexibility_model(tbounds: list, dbounds: list, y_list: tuple = None):
     j1 = 0.92
     j2 = 0.85
@@ -110,166 +107,7 @@ def cost_function(d):
     coeffs = np.array([2,3,5])
     return float(np.dot(coeffs, d))
 
-## Smolyak Quadrature
-
-def theta_interval_at_point(solution, theta_vector: np.ndarray, max_idx: int = 0, min_idx: int = 1) -> tuple:
-    """Given the parametric solution for theta_k and the current 'state' vector (theta_prev + d),
-        return the scalar lower and upper bound [t_min, t_max] for this theta_k.
-
-    Args:
-        solution (_type_): _description_
-        t_vector (np.ndarray): _description_
-        max_idx (int, optional): _description_. Defaults to 0.
-        min_idx (int, optional): _description_. Defaults to 1.
-
-    Returns:
-        tuple: _description_
-    """
-
-    theta_vector_aug = np.append(theta_vector, 1).reshape(-1, 1)
-
-    if isinstance(solution, list):
-        theta_min = solution[0]
-        theta_max = solution[1]
-        return float(theta_min), float(theta_max)
-
-    try:
-        region = solution.get_region(theta_vector.reshape(-1, 1))
-        coefficients = np.concatenate([region.A, region.b], axis=1)[:2, :]
-        max_coefficients = coefficients[max_idx]
-        min_coefficients = coefficients[min_idx]
-        # theta_max = float(max_coefficients @ theta_vector_aug)
-        # theta_min = float(min_coefficients @ theta_vector_aug)
-        theta_max = (max_coefficients @ theta_vector_aug).item()
-        theta_min = (min_coefficients @ theta_vector_aug).item()
-        return theta_min, theta_max
-    except:
-        raise ValueError(
-            "The provided theta_vector is not inside any critical region of the solution.")
-
-
-def map_u_to_theta_and_jacobian(solutions, u, dvector):
-    """
-    Given stage-aligned parametric solutions for theta_k and the current
-    disturbance vector d, return the theta vector and the Jacobian.
-
-    Parameters
-    ----------
-    solutions : list
-        Stage-aligned list. Each entry is either:
-        - a valid parametric solution object for stage k, or
-        - None for an empty / unusable stage.
-    u : np.ndarray
-        1D array of canonical coordinates.
-    dvector : np.ndarray
-        Current disturbance/design vector.
-
-    Returns
-    -------
-    theta_values : np.ndarray
-        Stage-aligned theta vector, same length as solutions.
-    jacobian : float
-    """
-    theta_values = []
-    jacobian = 1.0
-
-    for k, sol in enumerate(solutions):
-        if sol is None:
-            theta_k = 0.0
-            theta_values.append(theta_k)
-            continue
-
-        if isinstance(dvector, np.ndarray):
-            thetavector = np.block([np.array(theta_values, dtype=float), dvector])
-        else:
-            thetavector = np.array(theta_values, dtype=float)
-
-        thetamin, thetamax = theta_interval_at_point(sol, thetavector)
-        length = thetamax - thetamin
-
-        theta_k = 0.5 * length * u[k] + 0.5 * (thetamax + thetamin)
-        theta_values.append(theta_k)
-
-        jacobian *= 0.5 * length
-
-    return np.array(theta_values, dtype=float), jacobian
-
-def smolyak_nodes_weights(
-    n_theta: int,
-    level: int,
-    rule: str = "gaussian",
-    growth: bool = True,
-):
-    """
-    Returns:
-        ns_u: (N, n_theta) array of Smolyak nodes in u-space (each u_k in [-1,1])
-        ws_u: (N,) array of weights for integrating over [-1,1]^n_theta
-                   i.e., sum_i ws_u[i] * f(ns_u[i]) ≈ ∫_{[-1,1]^n} f(u) du
-    """
-    dist = cp.J(*[cp.Uniform(-1, 1) for _ in range(n_theta)])
-
-    # Chaospy returns nodes shape (n_theta, N) and weights for expectation
-    nodes, wE = cp.generate_quadrature(
-        order=level,
-        dist=dist,
-        rule=rule,
-        sparse=True,
-        growth=growth,
-    )
-
-    nodes = np.asarray(nodes, dtype=float)        # (n_theta, N)
-    wE = np.asarray(wE, dtype=float).ravel()      # (N,)
-
-    ns_u = nodes.T                             # (N, n_theta)
-
-    # Convert expectation weights to integral weights over [-1,1]^n:
-    # E[f(U)] = ∫ f(u) p(u) du with p(u)=1/2^n on [-1,1]^n
-    # => ∫ f(u) du = 2^n * E[f(U)]
-    ws_u = (2.0 ** n_theta) * wE
-
-    return ns_u, ws_u
-
-def calculate_stocflexibility_smolyak(solutions: List, level: int, joint_func: Callable[[List[float]], float],
-                                      d_vector: np.ndarray = None, rule: str = "gaussian", ns_u=None,
-                                      ws_u=None) -> float:
-    """Compute stochastic flexibility using a Smolyak sparse grid in canonical  u-space
-
-    Args:
-        solutions (List): list of solutions for each theta dimension (same structure as in calculate_stocflexibility)
-        level (int): Smolyak level (1,2,3,...) controls accuracy & number of points
-        joint_func (Callable[[List[float]], float]): callable f(theta_list) -> scalar
-        d_vector (np.ndarray, optional):design vector (np.ndarray). Defaults to None.
-        rule (str, optional): 1D quadrature rule passed to chaospy (e.g. "gaussian"). Defaults to "gaussian".
-
-    Returns:
-        float: _description_
-    """
-
-    n_theta = len(solutions)
-
-    if ns_u is None or ws_u is None:
-        ns_u, ws_u = smolyak_nodes_weights(
-            n_theta=n_theta,
-            level=level,
-            rule=rule,
-            growth=True,
-        )
-
-    start = time.time()
-    stochastic_flexibility = 0.0
-
-    for i in range(ns_u.shape[0]):
-        u_vector = ns_u[i, :]
-        theta_vector, jacobian = map_u_to_theta_and_jacobian(
-            solutions, u_vector, d_vector)
-        func_value = joint_func(theta_vector)
-        stochastic_flexibility += func_value * jacobian * ws_u[i]
-
-    end = time.time()
-    print(
-        f"Smolyak stochastic flexibility computed in {end - start:.4f} seconds.")
-    return stochastic_flexibility
-
+# Helper functions
 def mpformulate_theta_bounds(flex_sol, num_theta: int, theta_bounds: list, num_design: int = 0, design_bounds: list = None, psi_idx: int = 0, theta_m: int = 0):
     A0, b0, F0 = np.empty((len(flex_sol), num_theta)), np.empty(
         (len(flex_sol), 1)), np.empty((len(flex_sol), num_design))
@@ -438,15 +276,11 @@ def generate_region_combos(region_sizes, n_gl):
         region_combo_shape.extend([range(region_sizes[k])] * n_paths)
     return list(itools.product(*region_combo_shape))
 
-
 def affine_expr(coeffs, symbols):
     return sum(c * s for c, s in zip(coeffs[:-1], symbols)) + coeffs[-1]
 
-
 def normalized_lhs(ineq):
     return ineq.lhs.expand() if hasattr(ineq, 'lhs') else None
-
-
 def _prepare_state_data(state, tbounds, dbounds, *, solve_algo, theta_algo, log=False):
     """
     Build and solve the flexibility problem for one state, then return only valid theta-related data.
@@ -504,6 +338,165 @@ def _prepare_state_data(state, tbounds, dbounds, *, solve_algo, theta_algo, log=
         "filtered_theta_bounds": filtered_theta_bounds,
         "filtered_theta_regions": filtered_theta_regions,
     }
+
+
+def theta_interval_at_point(solution, theta_vector: np.ndarray, max_idx: int = 0, min_idx: int = 1) -> tuple:
+    """Given the parametric solution for theta_k and the current 'state' vector (theta_prev + d),
+        return the scalar lower and upper bound [t_min, t_max] for this theta_k.
+
+    Args:
+        solution (_type_): _description_
+        t_vector (np.ndarray): _description_
+        max_idx (int, optional): _description_. Defaults to 0.
+        min_idx (int, optional): _description_. Defaults to 1.
+
+    Returns:
+        tuple: _description_
+    """
+
+    theta_vector_aug = np.append(theta_vector, 1).reshape(-1, 1)
+
+    if isinstance(solution, list):
+        theta_min = solution[0]
+        theta_max = solution[1]
+        return float(theta_min), float(theta_max)
+
+    try:
+        region = solution.get_region(theta_vector.reshape(-1, 1))
+        coefficients = np.concatenate([region.A, region.b], axis=1)[:2, :]
+        max_coefficients = coefficients[max_idx]
+        min_coefficients = coefficients[min_idx]
+        # theta_max = float(max_coefficients @ theta_vector_aug)
+        # theta_min = float(min_coefficients @ theta_vector_aug)
+        theta_max = (max_coefficients @ theta_vector_aug).item()
+        theta_min = (min_coefficients @ theta_vector_aug).item()
+        return theta_min, theta_max
+    except:
+        raise ValueError(
+            "The provided theta_vector is not inside any critical region of the solution.")
+
+
+def map_u_to_theta_and_jacobian(solutions, u, dvector):
+    """
+    Given stage-aligned parametric solutions for theta_k and the current
+    disturbance vector d, return the theta vector and the Jacobian.
+
+    Parameters
+    ----------
+    solutions : list
+        Stage-aligned list. Each entry is either:
+        - a valid parametric solution object for stage k, or
+        - None for an empty / unusable stage.
+    u : np.ndarray
+        1D array of canonical coordinates.
+    dvector : np.ndarray
+        Current disturbance/design vector.
+
+    Returns
+    -------
+    theta_values : np.ndarray
+        Stage-aligned theta vector, same length as solutions.
+    jacobian : float
+    """
+    theta_values = []
+    jacobian = 1.0
+
+    for k, sol in enumerate(solutions):
+        if sol is None:
+            theta_k = 0.0
+            theta_values.append(theta_k)
+            continue
+
+        if isinstance(dvector, np.ndarray):
+            thetavector = np.block([np.array(theta_values, dtype=float), dvector])
+        else:
+            thetavector = np.array(theta_values, dtype=float)
+
+        thetamin, thetamax = theta_interval_at_point(sol, thetavector)
+        length = thetamax - thetamin
+
+        theta_k = 0.5 * length * u[k] + 0.5 * (thetamax + thetamin)
+        theta_values.append(theta_k)
+
+        jacobian *= 0.5 * length
+
+    return np.array(theta_values, dtype=float), jacobian
+
+## Smolyak Quadrature
+def smolyak_nodes_weights(
+    n_theta: int,
+    level: int,
+    rule: str = "gaussian",
+    growth: bool = True,
+):
+    """
+    Returns:
+        ns_u: (N, n_theta) array of Smolyak nodes in u-space (each u_k in [-1,1])
+        ws_u: (N,) array of weights for integrating over [-1,1]^n_theta
+                   i.e., sum_i ws_u[i] * f(ns_u[i]) ≈ ∫_{[-1,1]^n} f(u) du
+    """
+    dist = cp.J(*[cp.Uniform(-1, 1) for _ in range(n_theta)])
+
+    # Chaospy returns nodes shape (n_theta, N) and weights for expectation
+    nodes, wE = cp.generate_quadrature(
+        order=level,
+        dist=dist,
+        rule=rule,
+        sparse=True,
+        growth=growth,
+    )
+
+    nodes = np.asarray(nodes, dtype=float)        # (n_theta, N)
+    wE = np.asarray(wE, dtype=float).ravel()      # (N,)
+
+    ns_u = nodes.T                             # (N, n_theta)
+
+    # Convert expectation weights to integral weights over [-1,1]^n:
+    # E[f(U)] = ∫ f(u) p(u) du with p(u)=1/2^n on [-1,1]^n
+    # => ∫ f(u) du = 2^n * E[f(U)]
+    ws_u = (2.0 ** n_theta) * wE
+
+    return ns_u, ws_u
+def calculate_stocflexibility_smolyak(solutions: List, level: int, joint_func: Callable[[List[float]], float],
+                                      d_vector: np.ndarray = None, rule: str = "gaussian", ns_u=None,
+                                      ws_u=None) -> float:
+    """Compute stochastic flexibility using a Smolyak sparse grid in canonical  u-space
+
+    Args:
+        solutions (List): list of solutions for each theta dimension (same structure as in calculate_stocflexibility)
+        level (int): Smolyak level (1,2,3,...) controls accuracy & number of points
+        joint_func (Callable[[List[float]], float]): callable f(theta_list) -> scalar
+        d_vector (np.ndarray, optional):design vector (np.ndarray). Defaults to None.
+        rule (str, optional): 1D quadrature rule passed to chaospy (e.g. "gaussian"). Defaults to "gaussian".
+
+    Returns:
+        float: _description_
+    """
+
+    n_theta = len(solutions)
+
+    if ns_u is None or ws_u is None:
+        ns_u, ws_u = smolyak_nodes_weights(
+            n_theta=n_theta,
+            level=level,
+            rule=rule,
+            growth=True,
+        )
+
+    start = time.time()
+    stochastic_flexibility = 0.0
+
+    for i in range(ns_u.shape[0]):
+        u_vector = ns_u[i, :]
+        theta_vector, jacobian = map_u_to_theta_and_jacobian(
+            solutions, u_vector, d_vector)
+        func_value = joint_func(theta_vector)
+        stochastic_flexibility += func_value * jacobian * ws_u[i]
+
+    end = time.time()
+    print(
+        f"Smolyak stochastic flexibility computed in {end - start:.4f} seconds.")
+    return stochastic_flexibility
 def _safe_sf_call(func, state, label, **kwargs):
     """
     Safely evaluate a stochastic flexibility routine for one state.
@@ -582,3 +575,129 @@ def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, ns_
         print(f"Finished for state {s}.")
 
     return sm_esf, esf_by_state
+
+## Parallelizing
+
+def generate_design_vectors_sobol(bounds, n_samples, scramble=True, seed=None):
+    """
+    Generate Sobol design vectors in the given bounds.
+
+    Parameters
+    ----------
+    bounds : list[tuple[float, float]]
+        [(lb1, ub1), (lb2, ub2), ...]
+    n_samples : int
+        Number of Sobol samples (total design vectors).
+    scramble : bool, optional
+        Whether to use scrambled Sobol (usually recommended).
+    seed : int or None
+        Random seed for reproducibility when scramble=True.
+
+    Returns
+    -------
+    list[np.ndarray]
+        List of design vectors as numpy arrays.
+    """
+    n_vars = len(bounds)
+
+    # create Sobol engine in [0, 1]^n_vars
+    engine = qmc.Sobol(d=n_vars, scramble=scramble, seed=seed)
+
+    # draw n_samples points (uniform in [0,1]^d)
+    u = engine.random(n=n_samples)  # shape: (n_samples, n_vars)
+
+    # scale each dimension to its [lb, ub] interval
+    lbs = np.array([b[0] for b in bounds])
+    ubs = np.array([b[1] for b in bounds])
+
+    samples = lbs + u * (ubs - lbs)
+
+    return [samples[i, :] for i in range(n_samples)]
+
+def _sm_esf_worker(d_vector, y_d, prepared_data_by_s, s_level):
+    esf_sm, sm_esf_by_state = calculate_sm_esf(
+        y_d=y_d,
+        prepared_data_by_s=prepared_data_by_s,
+        d_v=d_vector,   # change if your actual argument name differs
+        s_level=s_level,
+    )
+
+    return {
+        "design_vector": np.array(d_vector),
+        "cost": cost_function(d_vector),
+        "esf_sm": esf_sm,
+        # "sm_esf_by_state": sm_esf_by_state,
+    }
+
+def parallel_calculate_sm_esf_threads(
+    design_vectors,
+    y_d,
+    load_prepared_data_by_s,
+    s_level=16,
+    max_workers=None,
+    show_progress=True,
+):
+    """
+    Parallel evaluation with preserved output order and optional tqdm progress bar.
+    """
+    if max_workers is None:
+        max_workers = os.cpu_count() or 1
+
+    worker = partial(
+        _sm_esf_worker,
+        y_d=y_d,
+        prepared_data_by_s=load_prepared_data_by_s,
+        s_level=s_level,
+    )
+
+    results = [None] * len(design_vectors)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {
+            executor.submit(worker, d_vec): idx
+            for idx, d_vec in enumerate(design_vectors)
+        }
+
+        iterator = as_completed(future_to_idx)
+
+        # if show_progress:
+        #     iterator = tqdm(
+        #         iterator,
+        #         total=len(design_vectors),
+        #         desc="Evaluating design vectors"
+        #     )
+
+        for future in iterator:
+            idx = future_to_idx[future]
+            results[idx] = future.result()
+
+    return results
+
+
+prepared_data_by_state = {
+    state: _prepare_state_data(
+        state,
+        tbounds=t_bounds,
+        dbounds=d_bounds,
+        solve_algo=feasibility_algo,
+        theta_algo=theta_bounds_algo,
+    )
+    for state in y_dict
+}
+
+load_prepared_data_by_state = prepared_data_by_state
+
+ns = 8
+dvector_list_sobol = generate_design_vectors_sobol(d_bounds, n_samples=ns)
+
+MC_sm_results = parallel_calculate_sm_esf_threads(
+    design_vectors = dvector_list_sobol,
+    y_d = y_dict,
+    load_prepared_data_by_s = load_prepared_data_by_state,
+    s_level=smolyak_level,
+    max_workers=None,
+    show_progress=True,
+)
+
+with open (f'test.pkl', 'wb') as f:
+    pickle.dump(MC_sm_results, f)
