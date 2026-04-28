@@ -16,7 +16,19 @@ import gurobipy as gp
 from gurobipy import GRB
 import matplotlib.pyplot as plt
 
+#######################################################################################################################
+# CASE STUDY functions
+#######################################################################################################################
+def joint_pdf(theta: list):
+    Sval, Dval = theta
+    eps = 1e-12
+    x = max(Sval - 8.0, eps)
+    return (1 / (1.2 * np.pi * x)) * np.exp(
+        -1.39 * (np.log(x)) ** 2 - 0.5 * (Dval - 7.0) ** 2)
 
+def cost_function(d):
+    coeffs = np.array([2,3,5])
+    return float(np.dot(coeffs, d))
 
 #######################################################################################################################
 # SMOLYAK QUADRATURE
@@ -147,7 +159,7 @@ def calculate_stocflexibility_smolyak(solutions: List, level: int, joint_func: C
     Args:
         solutions (List): list of solutions for each theta dimension (same structure as in calculate_stocflexibility)
         level (int): Smolyak level (1,2,3,...) controls accuracy & number of points
-        joint_func (Callable[[List[float]], float]): callable f(theta_list) -> scalar
+        joint_func (Callable[[List[float]], float]): callaxble f(theta_list) -> scalar
         d_vector (np.ndarray, optional):design vector (np.ndarray). Defaults to None.
         rule (str, optional): 1D quadrature rule passed to chaospy (e.g. "gaussian"). Defaults to "gaussian".
 
@@ -213,7 +225,7 @@ def _safe_sf_call(func, state, label, **kwargs):
 
         raise
 
-def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, joint_func, ns_u=None, ws_u=None):
+def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, ns_u=None, ws_u=None):
     """
     Smolyak ESF using stage-aligned prepared data.
     Assumes map_u_to_theta_and_jacobian() now handles None entries in solutions.
@@ -245,7 +257,7 @@ def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, joi
                 label="Smolyak",
                 solutions=sols,
                 level=s_level,
-                joint_func=joint_func,
+                joint_func=joint_pdf,
                 d_vector=d_v,
                 ns_u = ns_u,
                 ws_u = ws_u,
@@ -303,7 +315,7 @@ def generate_design_vectors_sobol(bounds, n_samples, scramble=True, seed=2):
 
     return [samples[i, :] for i in range(n_samples)]
 
-def _sm_esf_worker_mp(design_vector, y_d, prepared_data_by_s, s_level, cost_func, joint_func):
+def _sm_esf_worker_mp(design_vector, y_d, prepared_data_by_s, s_level):
     """
     Top-level worker for multiprocessing.
     Must stay at module scope.
@@ -313,12 +325,12 @@ def _sm_esf_worker_mp(design_vector, y_d, prepared_data_by_s, s_level, cost_func
         prepared_data_by_s=prepared_data_by_s,
         d_v=design_vector,   # rename if your arg name differs
         s_level=s_level,
-        joint_func=joint_func,
+        # joint_func=joint_func,
     )
 
     return {
         "design_vector": np.array(design_vector),
-        "cost": cost_func(design_vector),
+        "cost": cost_function(design_vector),
         "esf_sm": esf_sm,
     }
 
@@ -326,8 +338,8 @@ def parallel_calculate_sm_esf_processes(
         design_vectors,
         y_d,
         load_prepared_data_by_s,
-        cost_func,
-        joint_func,
+        # cost_func,
+        # joint_func,
         s_level=16,
         max_workers=None,
         show_progress=True,
@@ -346,8 +358,8 @@ def parallel_calculate_sm_esf_processes(
         y_d=y_d,
         prepared_data_by_s=load_prepared_data_by_s,
         s_level=s_level,
-        cost_func = cost_func,
-        joint_func = joint_func
+        # cost_func = cost_function,
+        # joint_func = joint_func
     )
 
     results = [None] * len(design_vectors)
