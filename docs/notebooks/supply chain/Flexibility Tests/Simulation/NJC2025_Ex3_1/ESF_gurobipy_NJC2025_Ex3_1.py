@@ -8,25 +8,48 @@ from functools import partial
 import os
 from tqdm.auto import tqdm
 from scipy.stats import qmc
-# from sklearn.linear_model import LinearRegression
-# from sklearn.preprocessing import PolynomialFeatures
-# from sklearn.pipeline import Pipeline
-# from sklearn.metrics import r2_score, mean_squared_error
-import gurobipy as gp
-from gurobipy import GRB
-import matplotlib.pyplot as plt
-
+import math
+from gurobipy import nlfunc
 #######################################################################################################################
 # CASE STUDY functions
 #######################################################################################################################
-def joint_pdf(theta: list):
-    Sval, Dval = theta
-    eps = 1e-12
-    x = max(Sval - 8.0, eps)
-    return (1 / (1.2 * np.pi * x)) * np.exp(
-        -1.39 * (np.log(x)) ** 2 - 0.5 * (Dval - 7.0) ** 2)
+demand_theta_nominal = {
+    'B': 7,
+    'C': 4,
+}
 
-cost_coeff_list = [2,3,5]
+demand_theta_stddev = {
+    'B': (0.3)**(0.5),
+    'C': (0.3)**(0.5),
+}
+def joint_pdf(theta: list, eps: float = 1e-8):
+    theta_b, theta_c = theta
+    b_nom, c_nom = demand_theta_nominal['B'], demand_theta_nominal['C']
+    b_std, c_std = demand_theta_stddev['B'], demand_theta_stddev['C']
+
+    contrib_b = (1 / np.sqrt(2 * np.pi)) * (1 / b_std) * np.exp(-(theta_b - b_nom) ** 2 / (2 * b_std ** 2))
+
+    contrib_c = (1 / np.sqrt(2 * np.pi)) * (1 / c_std) * np.exp(-(theta_c - c_nom) ** 2 / (2 * c_std ** 2))
+
+    return contrib_b * contrib_c
+
+
+def pdf_builder(theta, n, eps=1e-8):
+    theta_b = theta[(0, n)]
+    theta_c = theta[(1, n)]
+    b_nom, c_nom = demand_theta_nominal['B'], demand_theta_nominal['C']
+    b_std, c_std = demand_theta_stddev['B'], demand_theta_stddev['C']
+
+    contrib_b = (1 / np.sqrt(2 * math.pi)) * (1 / b_std) * nlfunc.exp(
+        -((theta_b - b_nom) * (theta_b - b_nom)) / (2 * b_std * b_std))
+
+    contrib_c = (1 / np.sqrt(2 * math.pi)) * (1 / c_std) * nlfunc.exp(
+        -((theta_c - c_nom) * (theta_c - c_nom)) / (2 * c_std * c_std))
+
+    return contrib_b * contrib_c
+
+
+cost_coeff_list = [5, 10]
 def cost_function(d):
     coeffs = np.array(cost_coeff_list)
     return float(np.dot(coeffs, d))
