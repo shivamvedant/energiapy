@@ -10,43 +10,42 @@ from tqdm.auto import tqdm
 from scipy.stats import qmc
 import math
 from gurobipy import nlfunc
+
 #######################################################################################################################
 # CASE STUDY functions
 #######################################################################################################################
-demand_theta_nominal = {
-    'B': 7,
-    'C': 4,
-}
+supply_theta_nominal = {'A': 45000, 'B': 100000, 'C': 75000}
+supply_theta_stddev = {'A': np.sqrt(7500), 'B': np.sqrt(16667), 'C': np.sqrt(12500)}
 
-demand_theta_stddev = {
-    'B': (0.3)**(0.5),
-    'C': (0.3)**(0.5),
-}
+
 def joint_pdf(theta: list, eps: float = 1e-8):
-    theta_b, theta_c = theta
-    b_nom, c_nom = demand_theta_nominal['B'], demand_theta_nominal['C']
-    b_std, c_std = demand_theta_stddev['B'], demand_theta_stddev['C']
+    theta_a, theta_b, theta_c = theta
+    a_nom, b_nom, c_nom = supply_theta_nominal['A'], supply_theta_nominal['B'], supply_theta_nominal['C']
+    a_std, b_std, c_std = supply_theta_stddev['A'], supply_theta_stddev['B'], supply_theta_stddev['C']
 
+    contrib_a = (1 / np.sqrt(2 * np.pi)) * (1 / a_std) * np.exp(-(theta_a - a_nom) ** 2 / (2 * a_std ** 2))
     contrib_b = (1 / np.sqrt(2 * np.pi)) * (1 / b_std) * np.exp(-(theta_b - b_nom) ** 2 / (2 * b_std ** 2))
-
     contrib_c = (1 / np.sqrt(2 * np.pi)) * (1 / c_std) * np.exp(-(theta_c - c_nom) ** 2 / (2 * c_std ** 2))
 
-    return contrib_b * contrib_c
+    return contrib_a * contrib_b * contrib_c
 
-cost_coeff_list = [5, 10]
+
+capex_factor = {'0': 5000, '1': 5000, '2': 5000, '3': 5000}
+cost_coeff_list = [v for k, v in capex_factor.items()]
 def cost_function(d):
     coeffs = np.array(cost_coeff_list)
     return float(np.dot(coeffs, d))
+
 
 #######################################################################################################################
 # SMOLYAK QUADRATURE
 #######################################################################################################################
 
 def smolyak_nodes_weights(
-    n_theta: int,
-    level: int,
-    rule: str = "gaussian",
-    growth: bool = True,
+        n_theta: int,
+        level: int,
+        rule: str = "gaussian",
+        growth: bool = True,
 ):
     """
     Returns:
@@ -65,10 +64,10 @@ def smolyak_nodes_weights(
         growth=growth,
     )
 
-    nodes = np.asarray(nodes, dtype=float)        # (n_theta, N)
-    wE = np.asarray(wE, dtype=float).ravel()      # (N,)
+    nodes = np.asarray(nodes, dtype=float)  # (n_theta, N)
+    wE = np.asarray(wE, dtype=float).ravel()  # (N,)
 
-    ns_u = nodes.T                             # (N, n_theta)
+    ns_u = nodes.T  # (N, n_theta)
 
     # Convert expectation weights to integral weights over [-1,1]^n:
     # E[f(U)] = ∫ f(u) p(u) du with p(u)=1/2^n on [-1,1]^n
@@ -76,13 +75,15 @@ def smolyak_nodes_weights(
     ws_u = (2.0 ** n_theta) * wE
 
     return ns_u, ws_u
+
+
 def theta_interval_at_point(solution, theta_vector: np.ndarray, max_idx: int = 0, min_idx: int = 1) -> tuple:
     """Given the parametric solution for theta_k and the current 'state' vector (theta_prev + d),
         return the scalar lower and upper bound [t_min, t_max] for this theta_k.
 
     Args:
         solution (_type_): _description_
-        t_vector (np.ndarray): _description_
+        theta_vector (np.ndarray): _description_
         max_idx (int, optional): _description_. Defaults to 0.
         min_idx (int, optional): _description_. Defaults to 1.
 
@@ -200,6 +201,7 @@ def calculate_stocflexibility_smolyak(solutions: List, level: int, joint_func: C
         f"Smolyak stochastic flexibility computed in {end - start:.4f} seconds.")
     return stochastic_flexibility
 
+
 #######################################################################################################################
 # EXPECTED STOCHASTIC FLEXIBILITY FUNCTION
 #######################################################################################################################
@@ -232,6 +234,7 @@ def _safe_sf_call(func, state, label, **kwargs):
             return None
 
         raise
+
 
 def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, ns_u=None, ws_u=None):
     """
@@ -267,8 +270,8 @@ def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, ns_
                 level=s_level,
                 joint_func=joint_pdf,
                 d_vector=d_v,
-                ns_u = ns_u,
-                ws_u = ws_u,
+                ns_u=ns_u,
+                ws_u=ws_u,
             )
 
             if sf_idx_smolyak is not None:
@@ -282,6 +285,7 @@ def calculate_sm_esf(y_d: dict, prepared_data_by_s: dict, d_v, s_level: int, ns_
         print(f"Finished for state {s}.")
 
     return sm_esf, esf_by_state
+
 
 #######################################################################################################################
 # PARALLELIZATION
@@ -323,6 +327,7 @@ def generate_design_vectors_sobol(bounds, n_samples, scramble=True, seed=2):
 
     return [samples[i, :] for i in range(n_samples)]
 
+
 def _sm_esf_worker_mp(design_vector, y_d, prepared_data_by_s, s_level):
     """
     Top-level worker for multiprocessing.
@@ -331,7 +336,7 @@ def _sm_esf_worker_mp(design_vector, y_d, prepared_data_by_s, s_level):
     esf_sm, _ = calculate_sm_esf(
         y_d=y_d,
         prepared_data_by_s=prepared_data_by_s,
-        d_v=design_vector,   # rename if your arg name differs
+        d_v=design_vector,  # rename if your arg name differs
         s_level=s_level,
         # joint_func=joint_func,
     )
@@ -341,6 +346,7 @@ def _sm_esf_worker_mp(design_vector, y_d, prepared_data_by_s, s_level):
         "cost": cost_function(design_vector),
         "esf_sm": esf_sm,
     }
+
 
 def parallel_calculate_sm_esf_processes(
         design_vectors,
