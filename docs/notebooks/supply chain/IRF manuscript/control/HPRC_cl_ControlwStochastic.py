@@ -1071,8 +1071,8 @@ def supply_chain_controller(time_ind: List, norm_varying_dict: Dict, start_at: U
         result = solve(scenario=scenario, instance=model, solver='gurobi', name=f"MILP_{time_ind[t]}")
 
         if t == 84:
-            model.write('model4gurobi.lp', io_options={'symbolic_solver_labels': True})
-            model.write('model4gurobi.mps')
+            model.write('cl_model4gurobi.lp', io_options={'symbolic_solver_labels': True})
+            model.write('cl_model4gurobi.mps')
 
         if result.output['termination'] == 'infeasible':
             print(f"\n### Model infeasible at time {time_ind[t]} - stopping controller loop ###\n")

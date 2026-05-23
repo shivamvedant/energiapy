@@ -476,35 +476,39 @@ def supply_chain_controller(time_ind: List, norm_varying_dict: Dict, start_at: U
         scen_df = pd.concat([pd.Series(norm_varying_dict[k][t]) for k in norm_varying_dict], axis=1,
                             keys=list(norm_varying_dict.keys()))
 
-        if 165 <= t <= 192:
-            print(scen_df[[('loc1', 'com1_pur')]].dropna())
+        # if 165 <= t <= 192:
+        #     print(scen_df[[('loc1', 'com1_pur')]].dropna())
 
-    #     scenario, model = build_schedule_model(start_time=time_ind[t0], end_time=time_ind[t1], eps=eps, scen_df=scen_df)
-    #
-    #     # Fix design vars only once (at the first iteration)
-    #     if t == start_idx and design_model is not None:
-    #         fix_design_variables(model2fix=model, design_model=design_model)
-    #
-    #     # Fix past decisions from the previous iteration (or initialize_dict on the first pass)
-    #     if prev_packet:
-    #         fix_scheduling_variables(model2fix=model, current_time_idx=time_ind[t], initial_dict=prev_packet,
-    #                                  time_scales=scenario.scales, strict=True)
-    #
-    #     # Solve
-    #     result = solve(scenario=scenario, instance=model, solver='gurobi', name=f"MILP_{time_ind[t]}")
-    #
-    #     if result.output['termination'] == 'infeasible':
-    #         print(f"\n### Model infeasible at time {time_ind[t]} - stopping controller loop ###\n")
-    #         return close_loop_results, result, model, scenario
-    #
-    #     # Extract values (small, serializable packet)
-    #     packet = {v.name: v.extract_values() for v in model.component_objects(Var)}
-    #     close_loop_results[time_ind[t]] = packet
-    #     prev_packet = packet  # becomes the fixes for the next iteration
-    #
-    #     print(f"\n##### Finished {time_ind[t]} of {time_ind[end_idx]} #####\n")
-    #
-    # return close_loop_results, result, model, scenario
+        scenario, model = build_schedule_model(start_time=time_ind[t0], end_time=time_ind[t1], eps=eps, scen_df=scen_df)
+
+        # Fix design vars only once (at the first iteration)
+        if t == start_idx and design_model is not None:
+            fix_design_variables(model2fix=model, design_model=design_model)
+
+        # Fix past decisions from the previous iteration (or initialize_dict on the first pass)
+        if prev_packet:
+            fix_scheduling_variables(model2fix=model, current_time_idx=time_ind[t], initial_dict=prev_packet,
+                                     time_scales=scenario.scales, strict=True)
+
+        # Solve
+        result = solve(scenario=scenario, instance=model, solver='gurobi', name=f"MILP_{time_ind[t]}")
+
+        if t == 168:
+            model.write('cl_step2_model4gurobi.lp', io_options={'symbolic_solver_labels': True})
+            model.write('cl_step2_model4gurobi.mps')
+
+        if result.output['termination'] == 'infeasible':
+            print(f"\n### Model infeasible at time {time_ind[t]} - stopping controller loop ###\n")
+            return close_loop_results, result, model, scenario
+
+        # Extract values (small, serializable packet)
+        packet = {v.name: v.extract_values() for v in model.component_objects(Var)}
+        close_loop_results[time_ind[t]] = packet
+        prev_packet = packet  # becomes the fixes for the next iteration
+
+        print(f"\n##### Finished {time_ind[t]} of {time_ind[end_idx]} #####\n")
+
+    return close_loop_results, result, model, scenario
 
 if __name__ == '__main__':
     schedule_time_intervals = 7  # Number of time intervals in a planning horizon
