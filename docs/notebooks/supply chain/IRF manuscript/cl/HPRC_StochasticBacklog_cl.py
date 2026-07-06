@@ -469,7 +469,7 @@ if __name__ =='__main__':
         obj_dict = {'objective': model_obj[i]() for i in model_obj.keys()}
         output_dict[scen] ={**vars_dict, **obj_dict}
 
-    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl','wb') as file:
+    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl', 'wb') as file:
         pickle.dump(output_dict,file)
 
     exPen, exBacklogPen = 0, 0
