@@ -1,8 +1,7 @@
 import sys
-
 sys.path.append('/scratch/user/shivam.vedant')
 sys.path.append('/scratch/user/shivam.vedant/src')
-# sys.path.append('../../../../src')
+# sys.path.append('../../../../../src')
 
 import pandas
 import time
@@ -31,7 +30,7 @@ schedule_exec_scenarios = 52
 schedule_time_intervals = 7
 
 M = 1e4  # Big M
-design_annualization_factor = 1 / design_planning_horizons
+design_annualization_factor = 1/design_planning_horizons
 
 fill_rate = 0.0
 # fill_rate = float(sys.argv[1])
@@ -39,7 +38,7 @@ print(f"fill_rate: {fill_rate}")
 print(f"Type: {type(fill_rate)}")
 
 
-def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict: dict = None):
+def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict:dict=None):
     default_df = pandas.DataFrame(data=[1] * schedule_exec_scenarios)
 
     # Define temporal scales
@@ -274,12 +273,12 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict: di
 
     distance_matrix = [
         [0, 55, 196, M, 130, M, M],
-        [55, 0, M, 163, 112, M, M],
+        [55, 0, M, 163, 112, M, 134],
         [196, M, 0, 63, M, M, M],
         [M, 163, 63, 0, 95, 117, 88],
         [130, 112, M, 95, 0, 150, 134],
         [M, M, M, 117, M, 0, M],
-        [M, M, M, 88, 134, M, 0]
+        [M, 134, M, 88, 134, M, 0]
     ]
 
     locset = [loc1, loc2, loc3, loc4, loc5, loc6, loc7]
@@ -336,29 +335,26 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict: di
     backlog_penalty_dict = {i: {com1_sold: backlog_penalty} if i == loc5 else {com1_sold: 0} for i in locset}
     # backlog_zero = {}
 
-    scenario = Scenario(name=f'backlog design scenario CL', scales=scales, scheduling_scale_level=2,
-                        network_scale_level=0,
+    scenario = Scenario(name=f'backlog design scenario NCL', scales=scales, scheduling_scale_level=2, network_scale_level=0,
                         purchase_scale_level=2, availability_scale_level=1, demand_scale_level=2,
                         backlog_penalty_scale_level=2,
                         capacity_scale_level=1, network=network, demand=demand_dict, demand_penalty=demand_penalty_dict,
                         backlog_penalty=backlog_penalty_dict,
-                        label='Design Scenario with Backlog with Continual Learning',
-                        annualization_factor=design_annualization_factor)
+                        label='Design Scenario with Backlog without Continual Learning', annualization_factor=design_annualization_factor)
 
     return scenario
 
-
 def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_dict: dict = None):
-    scenario = build_design_model(scen_df=scen_df, eps=eps, init_des_dict=init_des_dict)
+    scenario = build_design_model(scen_df=scen_df, eps=eps, init_des_dict = init_des_dict)
     # ======================================================================================================================
     # Declare problem
     # ======================================================================================================================
     # backlog_zero = {'loc5': {'com1_sold': 34}}
     problem_mincost = formulate(scenario=scenario, demand_sign='eq', objective=Objective.COST_W_DEMAND_PENALTY,
-                                initial_design_dict=init_des_dict,
-                                constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
-                                             Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
-                                             Constraints.NETWORK, Constraints.PRESERVE_NETWORK})
+                                    initial_design_dict=init_des_dict,
+                                    constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
+                                                 Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
+                                                 Constraints.NETWORK, Constraints.PRESERVE_NETWORK})
 
     # demand = scenario.demand
     # if isinstance(demand, dict):
@@ -389,19 +385,15 @@ def design_scenario_creator(scen_name, **kwargs):
     scen_dict = kwargs.get('scenario_dict')
     # eps = kwargs.get('epsilon')
     fsv = kwargs.get('fsv')
-    initial_design_dict = kwargs.get('initial_design_dict')
-    scen, model = build_design_smodel(scen_df=scen_dict[scen_name]['factor'], init_des_dict=initial_design_dict)
+    scen, model = build_design_smodel(scen_df=scen_dict[scen_name]['factor'])
     sputils.attach_root_node(model, model.first_stage_cost, list(getattr(model, v) for v in fsv))
     model._mpisppy_probability = scen_dict[scen_name]['prob']
     return model
 
-if __name__ == '__main__':
+if __name__ =='__main__':
 
-    with open('backlog_scen_dict_cl.pkl', 'rb') as file:
+    with open('scen_dict_ncl.pkl', 'rb') as file:
         load_scenario_dict = pickle.load(file)
-
-    with open('../ncl/ssoln_32_00_Backlog_ncl.pkl', 'rb') as file:
-        load_initial_design_dict = pickle.load(file)
 
     load_scenario_names = list(load_scenario_dict.keys())
     print(f"Sum of probabilities of all scenarios: {sum(load_scenario_dict[scen]['prob'] for scen in load_scenario_dict):.6f}")
@@ -415,31 +407,29 @@ if __name__ == '__main__':
     }
     scenario_creator_kwargs = {'scenario_dict': load_scenario_dict,
                                'epsilon': fill_rate,
-                               'fsv': first_stage_variables,
-                               'initial_design_dict': load_initial_design_dict}
+                               'fsv': first_stage_variables}
 
     start_time = time.time()
-    ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator,
-                          scenario_creator_kwargs=scenario_creator_kwargs)
+    ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator, scenario_creator_kwargs=scenario_creator_kwargs)
     results = ef_UI.solve_extensive_form(solver_options=solver_options)
     end_time = time.time()
 
     exCost_UI = ef_UI.get_objective_value()
     ssoln_UI = ef_UI.get_root_solution()
 
-    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl", "wb") as file:
+    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_ncl.pkl", "wb") as file:
         pickle.dump(ssoln_UI, file)
 
     output_dict = dict()
     for scen in load_scenario_names:
         model_vars = getattr(ef_UI.ef, scen).component_map(ctype=Var)
-        vars_dict = {i: model_vars[i].extract_values() for i in model_vars.keys()}
+        vars_dict = {i:model_vars[i].extract_values() for i in model_vars.keys()}
         model_obj = getattr(ef_UI.ef, scen).component_map(ctype=Objective)
         obj_dict = {'objective': model_obj[i]() for i in model_obj.keys()}
-        output_dict[scen] = {**vars_dict, **obj_dict}
+        output_dict[scen] ={**vars_dict, **obj_dict}
 
-    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl', 'wb') as file:
-        pickle.dump(output_dict, file)
+    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_ncl.pkl','wb') as file:
+        pickle.dump(output_dict,file)
 
     exPen, exBacklogPen = 0, 0
     for scen in load_scenario_names:
@@ -455,8 +445,8 @@ if __name__ == '__main__':
 
     final_results_dict = {'Expected Cost UI': exCost_UI,
                           'First Stage Cost': fsc,
-                          'Total Expected Backlog Cost': exBacklogPen + exPen,
-                          'Execution Time': end_time - start_time}
+                          'Total Expected Penalty Cost': exPen + exBacklogPen,
+                          'Execution Time': start_time - end_time}
 
-    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl.pkl", 'wb') as file:
+    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_ncl.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)
