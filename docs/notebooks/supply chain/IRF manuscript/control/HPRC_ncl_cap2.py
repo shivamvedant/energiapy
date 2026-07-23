@@ -484,8 +484,8 @@ def supply_chain_controller(time_ind: List, norm_varying_dict: Dict, start_at: U
                                      time_scales=scenario.scales, strict=True)
 
         if t == 84:
-            model.write('model_ncl_cap1.lp', io_options={'symbolic_solver_labels': True})
-            # model.write('model_ncl_cap1.mps')
+            model.write('model_ncl_cap2.lp', io_options={'symbolic_solver_labels': True})
+            # model.write('model_ncl_cap2.mps')
 
         # Solve
         result = solve(scenario=scenario, instance=model, solver='gurobi', name=f"MILP_{time_ind[t]}")
@@ -569,5 +569,5 @@ if __name__ == '__main__':
 
     results_final = solve(scenario=scen_final, instance=model_final, solver='gurobi', name='MILP_final')
 
-    with open(f'ControlResults_ncl_cap1.pkl', 'wb') as file:
+    with open(f'ControlResults_ncl_cap2.pkl', 'wb') as file:
         pickle.dump(results_final, file)

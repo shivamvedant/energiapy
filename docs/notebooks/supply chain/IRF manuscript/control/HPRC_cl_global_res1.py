@@ -1,13 +1,10 @@
 import sys
 import pandas
 
-# sys.path.append('/scratch/user/shivam.vedant')
-# sys.path.append('/scratch/user/shivam.vedant/src')
-sys.path.append("../../../../../src")
+sys.path.append('/scratch/user/shivam.vedant')
+sys.path.append('/scratch/user/shivam.vedant/src')
+# sys.path.append("../../../../../src")
 import pandas as pd
-import random
-import matplotlib.pyplot as plt
-from matplotlib import rc
 from typing import Union, Tuple, List, Dict, Any
 
 from energiapy.components.temporal_scale import TemporalScale
@@ -185,7 +182,7 @@ def build_schedule_model(start_time: tuple, end_time: tuple, scen_df=pd.DataFram
     truck_cap64 = 100 * scale_factor * multiplier
     truck_cap75 = 80 * scale_factor * multiplier
 
-    plane_cap15 = 40 * scale_factor
+    plane_cap15 = 30 * scale_factor
 
     truck_capmin = 0.01
     plane_capmin = 0.01
@@ -327,20 +324,6 @@ def build_schedule_model(start_time: tuple, end_time: tuple, scen_df=pd.DataFram
                                              Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
                                              Constraints.NETWORK, Constraints.PRESERVE_NETWORK}, demand_sign='eq',
                                 objective=Objective.COST_W_DEMAND_PENALTY)
-
-    # demand = scenario.demand
-    # if isinstance(demand, dict):
-    #     if isinstance(list(demand.keys())[0], Location):
-    #         try:
-    #             demand = {i.name: {
-    #                 j.name: demand[i][j] for j in demand[i].keys()} for i in demand.keys()}
-    #         except:
-    #             pass
-    #
-    # constraint_demand_lb(instance=problem_mincost, demand=demand, demand_factor=scenario.demand_factor,
-    #                      demand_scale_level=scenario.demand_scale_level,
-    #                      scheduling_scale_level=scenario.scheduling_scale_level,
-    #                      location_resource_dict=scenario.location_resource_dict, epsilon=eps)
 
     return scenario, problem_mincost
 
@@ -500,12 +483,12 @@ def supply_chain_controller(time_ind: List, norm_varying_dict: Dict, start_at: U
             fix_scheduling_variables(model2fix=model, current_time_idx=time_ind[t], initial_dict=prev_packet,
                                      time_scales=scenario.scales, strict=True)
 
+        if t == 168:
+            model.write('model_cl_global_res1.lp', io_options={'symbolic_solver_labels': True})
+            # model.write('model_cl_global_res1.mps')
+
         # Solve
         result = solve(scenario=scenario, instance=model, solver='gurobi', name=f"MILP_{time_ind[t]}")
-
-        if t == 84:
-            model.write('cl_model4gurobi.lp', io_options={'symbolic_solver_labels': True})
-            model.write('cl_model4gurobi.mps')
 
         if result.output['termination'] == 'infeasible':
             print(f"\n### Model infeasible at time {time_ind[t]} - stopping controller loop ###\n")
@@ -540,21 +523,30 @@ if __name__ == '__main__':
     start_idx = 0
     end_idx = len(scale_iter_list) - 1
 
-    with open(f'../cl/output_128_00_Backlog_cl.pkl', 'rb') as file:
+    with open(f'../cl/output_128_00_cl_global.pkl', 'rb') as file:
         load_output_dict = pickle.load(file)
 
     design_scen = list(load_output_dict.keys())[0]
 
-    disruption_time_idx = 14  # Disruption starts here
-    early_warning = 1  # Information about the disruption is relayed to the model
-    capacity_factor_dict = {
-        k: [1] * (disruption_time_idx - 1) + [int(i < disruption_time_idx - early_warning - 1)] * (
-                schedule_exec_scenarios - disruption_time_idx + 1) for i in range(schedule_exec_scenarios)
+    resource_dis_start_idx = 27
+    resource_dis_end_idx = 39
+    resource_early_warning = 2
+
+    prefix = [1] * (resource_dis_start_idx - 1)
+    normal_vec = prefix + [1] * (schedule_exec_scenarios - resource_dis_start_idx + 1)
+    drop_vec = prefix + [0] * (resource_dis_end_idx - resource_dis_start_idx + 1) \
+               + [1] * (schedule_exec_scenarios - resource_dis_end_idx)
+
+    threshold = resource_dis_start_idx - resource_early_warning - 1
+
+    resource_factor_dict = {
+        k: (normal_vec if i < threshold else drop_vec)
+        for i in range(schedule_exec_scenarios)
         for k in range(i * schedule_time_intervals, (i + 1) * schedule_time_intervals)
     }
 
     disruption_dict = dict()
-    disruption_dict[('loc2', 'com1_process')] = capacity_factor_dict
+    disruption_dict[('loc1', 'com1_pur')] = resource_factor_dict
 
     close_loop_results, end_result, end_model, end_scenario = supply_chain_controller(time_ind=scale_iter_list,
                                                                                       norm_varying_dict=disruption_dict,
@@ -563,12 +555,8 @@ if __name__ == '__main__':
                                                                                           design_scen])
 
     scen_final, model_final = build_schedule_model(start_time=scale_iter_list[0], end_time=scale_iter_list[-1],
-                                                   scen_df=pandas.DataFrame(data={('loc2', 'com1_process'):
-                                                                                      disruption_dict[
-                                                                                          ('loc2', 'com1_process')][
-                                                                                          list(disruption_dict[('loc2',
-                                                                                                                'com1_process')].keys())[
-                                                                                              -1]]}))
+                                                   scen_df=pandas.DataFrame(data={('loc1', 'com1_pur'): disruption_dict[('loc1', 'com1_pur')][
+                                                       list(disruption_dict[('loc1', 'com1_pur')].keys())[-1]]}))
 
     states = {
         'P', 'B', 'C', 'S', 'R', 'Inv', 'P_m', 'P_material_m', 'Cap_P', 'Cap_S', 'Capex_process', 'Incidental_process',
@@ -586,5 +574,5 @@ if __name__ == '__main__':
 
     results_final = solve(scenario=scen_final, instance=model_final, solver='gurobi', name='MILP_final')
 
-    # with open(f'cl_ControlResults_Backlog_ph30.pkl', 'wb') as file:
-    #     pickle.dump(results_final, file)
+    with open(f'ControlResults_cl_global_res1.pkl', 'wb') as file:
+        pickle.dump(results_final, file)
