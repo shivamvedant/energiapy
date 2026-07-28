@@ -1,7 +1,8 @@
 import sys
+
 sys.path.append('/scratch/user/shivam.vedant')
 sys.path.append('/scratch/user/shivam.vedant/src')
-# sys.path.append('../../../../../src')
+# sys.path.append('../../../../src')
 
 import pandas
 import time
@@ -30,7 +31,7 @@ schedule_exec_scenarios = 52
 schedule_time_intervals = 7
 
 M = 1e4  # Big M
-design_annualization_factor = 1/design_planning_horizons
+design_annualization_factor = 1 / design_planning_horizons
 
 fill_rate = 0.0
 # fill_rate = float(sys.argv[1])
@@ -38,7 +39,7 @@ print(f"fill_rate: {fill_rate}")
 print(f"Type: {type(fill_rate)}")
 
 
-def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict:dict=None):
+def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict: dict = None):
     default_df = pandas.DataFrame(data=[1] * schedule_exec_scenarios)
 
     # Define temporal scales
@@ -333,78 +334,69 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict:dic
     demand_dict = {i: {com1_sold: daily_demand} if i == loc5 else {com1_sold: 0} for i in locset}
     demand_penalty_dict = {i: {com1_sold: demand_penalty} if i == loc5 else {com1_sold: 0} for i in locset}
     backlog_penalty_dict = {i: {com1_sold: backlog_penalty} if i == loc5 else {com1_sold: 0} for i in locset}
-    # backlog_zero = {}
 
-    scenario = Scenario(name=f'backlog design scenario CL', scales=scales, scheduling_scale_level=2, network_scale_level=0,
+    scenario = Scenario(name=f'backlog design scenario CL', scales=scales, scheduling_scale_level=2,
+                        network_scale_level=0,
                         purchase_scale_level=2, availability_scale_level=1, demand_scale_level=2,
                         backlog_penalty_scale_level=2,
                         capacity_scale_level=1, network=network, demand=demand_dict, demand_penalty=demand_penalty_dict,
                         backlog_penalty=backlog_penalty_dict,
-                        label='Design Scenario with Backlog with Continual Learning', annualization_factor=design_annualization_factor)
+                        label='Design Scenario with Backlog with Continual Learning',
+                        annualization_factor=design_annualization_factor)
 
-    if scen_df.empty:
-        # ======================================================================================================================
-        # Declare problem
-        # ======================================================================================================================
+    return scenario
 
-        # backlog_zero = {loc5: {com1_sold: 34}}
-        problem_mincost = formulate(scenario=scenario, demand_sign='eq', objective=Objective.COST_W_DEMAND_PENALTY,
-                                    constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
-                                                 Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
-                                                 Constraints.NETWORK, Constraints.PRESERVE_NETWORK},
-                                    initial_design_dict=init_des_dict)
-
-        # demand = scenario.demand
-        # if isinstance(demand, dict):
-        #     if isinstance(list(demand.keys())[0], Location):
-        #         try:
-        #             demand = {i.name: {
-        #                 j.name: demand[i][j] for j in demand[i].keys()} for i in demand.keys()}
-        #         except:
-        #             pass
-        #
-        # constraint_demand_lb(instance=problem_mincost, demand=demand, demand_factor=scenario.demand_factor,
-        #                      demand_scale_level=scenario.demand_scale_level,
-        #                      scheduling_scale_level=scenario.scheduling_scale_level,
-        #                      location_resource_dict=scenario.location_resource_dict, epsilon=eps)
-
-        scale_iter = scale_tuple(instance=problem_mincost, scale_levels=scenario.network_scale_level + 1)
-        problem_mincost.first_stage_cost = Var(within=NonNegativeReals, doc='First Stage Cost')
-
-        def first_stage_cost_rule(instance):
-            return (instance.first_stage_cost == sum(instance.Capex_network[scale_] for scale_ in scale_iter) +
-                    sum(instance.Capex_transport_network[scale_] for scale_ in scale_iter))
-
-        problem_mincost.constraint_first_stage_cost = Constraint(rule=first_stage_cost_rule)
-
-        return scenario, problem_mincost
+def var_key_to_string(vname, idx):
+    if isinstance(idx, tuple):
+        idx_str = ",".join(str(i) for i in idx)
     else:
-        return scenario
+        idx_str = str(idx)
+    return f"{vname}[{idx_str}]"
 
-def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_dict: dict = None):
-    scenario = build_design_model(scen_df=scen_df, eps=eps, init_des_dict = init_des_dict)
+def fix_nonselected_first_stage(m, init_des_dict, chk_pts=None, fix_binaries=True):
+    if init_des_dict is None:
+        return
+
+    expandable_names = set() if chk_pts is None else set(chk_pts)
+
+    first_stage_vars = ['Cap_P', 'Cap_S', 'Cap_F']
+    if fix_binaries:
+        first_stage_vars = ['X_P', 'X_S', 'X_F'] + first_stage_vars
+
+    for vname in first_stage_vars:
+        if not hasattr(m, vname):
+            continue
+
+        var = getattr(m, vname)
+
+        for idx in var:
+            full_key = var_key_to_string(vname, idx)
+
+            if full_key not in init_des_dict:
+                continue
+
+            if full_key not in expandable_names:
+                var[idx].fix(init_des_dict[full_key])
+def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_dict: dict = None,
+                        chk_pts=None,
+                        fix_binaries=False):
+    scenario = build_design_model(scen_df=scen_df, eps=eps, init_des_dict=init_des_dict)
     # ======================================================================================================================
     # Declare problem
     # ======================================================================================================================
+    # backlog_zero = {'loc5': {'com1_sold': 34}}
     problem_mincost = formulate(scenario=scenario, demand_sign='eq', objective=Objective.COST_W_DEMAND_PENALTY,
-                                    initial_design_dict=init_des_dict,
-                                    constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
-                                                 Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
-                                                 Constraints.NETWORK, Constraints.PRESERVE_NETWORK})
+                                initial_design_dict=init_des_dict,
+                                constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
+                                             Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
+                                             Constraints.NETWORK, Constraints.PRESERVE_NETWORK})
 
-    # demand = scenario.demand
-    # if isinstance(demand, dict):
-    #     if isinstance(list(demand.keys())[0], Location):
-    #         try:
-    #             demand = {i.name: {
-    #                 j.name: demand[i][j] for j in demand[i].keys()} for i in demand.keys()}
-    #         except:
-    #             pass
-    #
-    # constraint_demand_lb(instance=problem_mincost, demand=demand, demand_factor=scenario.demand_factor,
-    #                      demand_scale_level=scenario.demand_scale_level,
-    #                      scheduling_scale_level=scenario.scheduling_scale_level,
-    #                      location_resource_dict=scenario.location_resource_dict, epsilon=eps)
+    fix_nonselected_first_stage(
+        problem_mincost,
+        init_des_dict=init_des_dict,
+        chk_pts=chk_pts,
+        fix_binaries=fix_binaries
+    )
 
     scale_iter = scale_tuple(instance=problem_mincost, scale_levels=scenario.network_scale_level + 1)
     problem_mincost.first_stage_cost = Var(within=NonNegativeReals, doc='First Stage Cost')
@@ -417,27 +409,66 @@ def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_d
 
     return scenario, problem_mincost
 
+
 def design_scenario_creator(scen_name, **kwargs):
     scen_dict = kwargs.get('scenario_dict')
     # eps = kwargs.get('epsilon')
     fsv = kwargs.get('fsv')
     initial_design_dict = kwargs.get('initial_design_dict')
-    scen, model = build_design_smodel(scen_df=scen_dict[scen_name]['factor'], init_des_dict=initial_design_dict)
+    chk_pts = kwargs.get('chokepoints')
+    fix_binaries = kwargs.get('fix_binaries', True)
+
+    scen, model = build_design_smodel(scen_df=scen_dict[scen_name]['factor'], init_des_dict=initial_design_dict,
+                                      chk_pts=chk_pts,
+                                      fix_binaries=fix_binaries)
     sputils.attach_root_node(model, model.first_stage_cost, list(getattr(model, v) for v in fsv))
     model._mpisppy_probability = scen_dict[scen_name]['prob']
     return model
 
-if __name__ =='__main__':
 
-    with open('backlog_scen_dict_cl_step2.pkl', 'rb') as file:
+if __name__ == '__main__':
+
+    with open('scen_dict_cl.pkl', 'rb') as file:
         load_scenario_dict = pickle.load(file)
 
-    with open('../cl/ssoln_128_00_Backlog_cl.pkl', 'rb') as file:
+    with open('../ncl/ssoln_32_00_ncl.pkl', 'rb') as file:
         load_initial_design_dict = pickle.load(file)
 
     load_scenario_names = list(load_scenario_dict.keys())
-    print(f"Sum of probabilities of all scenarios: {sum(load_scenario_dict[scen]['prob'] for scen in load_scenario_dict):.6f}")
+    print(
+        f"Sum of probabilities of all scenarios: {sum(load_scenario_dict[scen]['prob'] for scen in load_scenario_dict):.6f}")
     print(f'Number of considered scenarios: {len(load_scenario_names)}')
+
+    chokepoints = {
+        # Bottlenecks for storage at location 5
+        'Cap_S[loc5,com1_store_com1_in_stored,0]',
+        'Cap_P[loc5,com1_process,0]',
+        'Cap_P[loc5,com1_store,0]',
+        'Cap_P[loc5,com1_store_discharge,0]',
+        'Cap_P[loc5,sell com1,0]',
+        'X_S[loc5,com1_store_com1_in_stored,0]',
+        'X_P[loc5,com1_process,0]',
+        'X_P[loc5,com1_store,0]',
+        'X_P[loc5,com1_store_discharge,0]',
+        'X_P[loc5,sell com1,0]',
+
+        # Bottlenecks for storage at location 4
+        'Cap_S[loc4,com1_store_com1_in_stored,0]',
+        'Cap_P[loc4,com1_process,0]',
+        'Cap_P[loc4,com1_store,0]',
+        'Cap_P[loc4,com1_store_discharge,0]',
+        'Cap_P[loc4,com1_loc4_send,0]',
+        'X_S[loc4,com1_store_com1_in_stored,0]',
+        'X_P[loc4,com1_process,0]',
+        'X_P[loc4,com1_store,0]',
+        'X_P[loc4,com1_store_discharge,0]',
+        'X_P[loc4,com1_loc4_send,0]',
+
+        # Bottlenecks for transport capacity between location 7 and 5
+        'Cap_P[loc7,com1_loc7_send,0]',
+        'Cap_F[loc7,loc5,truck75,0]',
+        'Cap_P[loc5,com1_receive_loc7,0]',
+    }
 
     first_stage_variables = ('X_P', 'X_S', 'X_F', 'Cap_P', 'Cap_S', 'Cap_F')
     options = {"solver": "gurobi"}
@@ -446,31 +477,34 @@ if __name__ =='__main__':
         'Heuristics': 0.20
     }
     scenario_creator_kwargs = {'scenario_dict': load_scenario_dict,
-                               'epsilon': fill_rate,
+                               # 'epsilon': fill_rate,
                                'fsv': first_stage_variables,
-                               'initial_design_dict': load_initial_design_dict}
+                               'initial_design_dict': load_initial_design_dict,
+                               'chokepoints': chokepoints,
+                               'fix_binaries': True}
 
     start_time = time.time()
-    ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator, scenario_creator_kwargs=scenario_creator_kwargs)
+    ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator,
+                          scenario_creator_kwargs=scenario_creator_kwargs)
     results = ef_UI.solve_extensive_form(solver_options=solver_options)
     end_time = time.time()
 
     exCost_UI = ef_UI.get_objective_value()
     ssoln_UI = ef_UI.get_root_solution()
 
-    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl_step2.pkl", "wb") as file:
+    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl", "wb") as file:
         pickle.dump(ssoln_UI, file)
 
     output_dict = dict()
     for scen in load_scenario_names:
         model_vars = getattr(ef_UI.ef, scen).component_map(ctype=Var)
-        vars_dict = {i:model_vars[i].extract_values() for i in model_vars.keys()}
+        vars_dict = {i: model_vars[i].extract_values() for i in model_vars.keys()}
         model_obj = getattr(ef_UI.ef, scen).component_map(ctype=Objective)
         obj_dict = {'objective': model_obj[i]() for i in model_obj.keys()}
-        output_dict[scen] ={**vars_dict, **obj_dict}
+        output_dict[scen] = {**vars_dict, **obj_dict}
 
-    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl_step2.pkl','wb') as file:
-        pickle.dump(output_dict,file)
+    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl', 'wb') as file:
+        pickle.dump(output_dict, file)
 
     exPen, exBacklogPen = 0, 0
     for scen in load_scenario_names:
@@ -486,8 +520,8 @@ if __name__ =='__main__':
 
     final_results_dict = {'Expected Cost UI': exCost_UI,
                           'First Stage Cost': fsc,
-                          'Total Expected Penalty Cost': exPen + exBacklogPen,
-                          'Execution Time': start_time - end_time}
+                          'Total Expected Backlog Cost': exBacklogPen + exPen,
+                          'Execution Time': end_time - start_time}
 
-    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_Backlog_cl_step2.pkl", 'wb') as file:
+    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)
