@@ -428,7 +428,7 @@ def design_scenario_creator(scen_name, **kwargs):
 
 if __name__ == '__main__':
 
-    with open('scen_dict_cl.pkl', 'rb') as file:
+    with open('scen_dict_cl2.pkl', 'rb') as file:
         load_scenario_dict = pickle.load(file)
 
     with open('../ncl/ssoln_32_00_ncl.pkl', 'rb') as file:
@@ -468,6 +468,11 @@ if __name__ == '__main__':
         'Cap_P[loc7,com1_loc7_send,0]',
         'Cap_F[loc7,loc5,truck75,0]',
         'Cap_P[loc5,com1_receive_loc7,0]',
+
+        # Bottlenecks for transport capacity between location 2 and 4
+        'Cap_P[loc2,com1_loc2_send,0]',
+        'Cap_F[loc2,loc4,truck24,0]',
+        'Cap_P[loc4,com1_receive_loc2,0]',
     }
 
     first_stage_variables = ('X_P', 'X_S', 'X_F', 'Cap_P', 'Cap_S', 'Cap_F')
@@ -483,19 +488,16 @@ if __name__ == '__main__':
                                'chokepoints': chokepoints,
                                'fix_binaries': True}
 
-    model_start_time = time.time()
+    start_time = time.time()
     ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator,
                           scenario_creator_kwargs=scenario_creator_kwargs)
-    model_end_time = time.time()
-
-    solver_start_time = time.time()
     results = ef_UI.solve_extensive_form(solver_options=solver_options)
-    solver_end_time = time.time()
+    end_time = time.time()
 
     exCost_UI = ef_UI.get_objective_value()
     ssoln_UI = ef_UI.get_root_solution()
 
-    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl", "wb") as file:
+    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_local_from_ncl.pkl", "wb") as file:
         pickle.dump(ssoln_UI, file)
 
     output_dict = dict()
@@ -506,7 +508,7 @@ if __name__ == '__main__':
         obj_dict = {'objective': model_obj[i]() for i in model_obj.keys()}
         output_dict[scen] = {**vars_dict, **obj_dict}
 
-    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl', 'wb') as file:
+    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_local_from_ncl.pkl', 'wb') as file:
         pickle.dump(output_dict, file)
 
     exPen, exBacklogPen = 0, 0
@@ -519,14 +521,12 @@ if __name__ == '__main__':
 
     print(f'Total Expected Cost considering disruptions: {exCost_UI:.4f}')
     print(f'First Stage Cost: {fsc:.4f}')
-    print(f'Model building time: {model_start_time - model_end_time:.4f} seconds')
-    print(f'Solver time: {solver_start_time - solver_end_time:.4f} seconds')
+    print(f'Execution time: {start_time - end_time:.4f} seconds')
 
     final_results_dict = {'Expected Cost UI': exCost_UI,
                           'First Stage Cost': fsc,
                           'Total Expected Backlog Cost': exBacklogPen + exPen,
-                          'Model Building Time': model_start_time - model_end_time,
-                          'Solver Time': solver_start_time - solver_end_time}
+                          'Execution Time': end_time - start_time}
 
-    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl", 'wb') as file:
+    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_local_from_ncl.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)

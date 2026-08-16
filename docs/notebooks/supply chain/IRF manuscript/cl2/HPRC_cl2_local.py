@@ -476,11 +476,14 @@ if __name__ == '__main__':
                                'chokepoints': chokepoints,
                                'fix_binaries': True}
 
-    start_time = time.time()
+    model_start_time = time.time()
     ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator,
                           scenario_creator_kwargs=scenario_creator_kwargs)
+    model_end_time = time.time()
+
+    solver_start_time = time.time()
     results = ef_UI.solve_extensive_form(solver_options=solver_options)
-    end_time = time.time()
+    solver_end_time = time.time()
 
     exCost_UI = ef_UI.get_objective_value()
     ssoln_UI = ef_UI.get_root_solution()
@@ -509,12 +512,14 @@ if __name__ == '__main__':
 
     print(f'Total Expected Cost considering disruptions: {exCost_UI:.4f}')
     print(f'First Stage Cost: {fsc:.4f}')
-    print(f'Execution time: {start_time - end_time:.4f} seconds')
+    print(f'Model building time: {model_start_time - model_end_time:.4f} seconds')
+    print(f'Solver time: {solver_start_time - solver_end_time:.4f} seconds')
 
     final_results_dict = {'Expected Cost UI': exCost_UI,
                           'First Stage Cost': fsc,
                           'Total Expected Backlog Cost': exBacklogPen + exPen,
-                          'Execution Time': end_time - start_time}
+                          'Model Building Time': model_start_time - model_end_time,
+                          'Solver Time': solver_start_time - solver_end_time}
 
     with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_local.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)

@@ -16,7 +16,6 @@ from energiapy.components.location import Location
 from energiapy.components.transport import Transport, VaryingTransport
 from energiapy.components.network import Network
 from energiapy.components.scenario import Scenario
-from energiapy.model.constraints.demand import constraint_demand_lb
 from energiapy.model.formulate import formulate, Constraints, Objective
 from energiapy.utils.scale_utils import scale_tuple
 from pyomo.environ import value as pyoval
@@ -346,40 +345,8 @@ def build_design_model(eps: float, scen_df=pandas.DataFrame(), init_des_dict: di
 
     return scenario
 
-def var_key_to_string(vname, idx):
-    if isinstance(idx, tuple):
-        idx_str = ",".join(str(i) for i in idx)
-    else:
-        idx_str = str(idx)
-    return f"{vname}[{idx_str}]"
 
-def fix_nonselected_first_stage(m, init_des_dict, chk_pts=None, fix_binaries=True):
-    if init_des_dict is None:
-        return
-
-    expandable_names = set() if chk_pts is None else set(chk_pts)
-
-    first_stage_vars = ['Cap_P', 'Cap_S', 'Cap_F']
-    if fix_binaries:
-        first_stage_vars = ['X_P', 'X_S', 'X_F'] + first_stage_vars
-
-    for vname in first_stage_vars:
-        if not hasattr(m, vname):
-            continue
-
-        var = getattr(m, vname)
-
-        for idx in var:
-            full_key = var_key_to_string(vname, idx)
-
-            if full_key not in init_des_dict:
-                continue
-
-            if full_key not in expandable_names:
-                var[idx].fix(init_des_dict[full_key])
-def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_dict: dict = None,
-                        chk_pts=None,
-                        fix_binaries=False):
+def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_dict: dict = None):
     scenario = build_design_model(scen_df=scen_df, eps=eps, init_des_dict=init_des_dict)
     # ======================================================================================================================
     # Declare problem
@@ -390,13 +357,6 @@ def build_design_smodel(scen_df=pandas.DataFrame(), eps: float = 1.0, init_des_d
                                 constraints={Constraints.COST, Constraints.TRANSPORT, Constraints.RESOURCE_BALANCE,
                                              Constraints.INVENTORY, Constraints.PRODUCTION, Constraints.BACKLOG,
                                              Constraints.NETWORK, Constraints.PRESERVE_NETWORK})
-
-    fix_nonselected_first_stage(
-        problem_mincost,
-        init_des_dict=init_des_dict,
-        chk_pts=chk_pts,
-        fix_binaries=fix_binaries
-    )
 
     scale_iter = scale_tuple(instance=problem_mincost, scale_levels=scenario.network_scale_level + 1)
     problem_mincost.first_stage_cost = Var(within=NonNegativeReals, doc='First Stage Cost')
@@ -415,12 +375,7 @@ def design_scenario_creator(scen_name, **kwargs):
     # eps = kwargs.get('epsilon')
     fsv = kwargs.get('fsv')
     initial_design_dict = kwargs.get('initial_design_dict')
-    chk_pts = kwargs.get('chokepoints')
-    fix_binaries = kwargs.get('fix_binaries', True)
-
-    scen, model = build_design_smodel(scen_df=scen_dict[scen_name]['factor'], init_des_dict=initial_design_dict,
-                                      chk_pts=chk_pts,
-                                      fix_binaries=fix_binaries)
+    scen, model = build_design_smodel(scen_df=scen_dict[scen_name]['factor'], init_des_dict=initial_design_dict)
     sputils.attach_root_node(model, model.first_stage_cost, list(getattr(model, v) for v in fsv))
     model._mpisppy_probability = scen_dict[scen_name]['prob']
     return model
@@ -428,7 +383,7 @@ def design_scenario_creator(scen_name, **kwargs):
 
 if __name__ == '__main__':
 
-    with open('scen_dict_cl.pkl', 'rb') as file:
+    with open('scen_dict_cl2.pkl', 'rb') as file:
         load_scenario_dict = pickle.load(file)
 
     with open('../ncl/ssoln_32_00_ncl.pkl', 'rb') as file:
@@ -439,37 +394,6 @@ if __name__ == '__main__':
         f"Sum of probabilities of all scenarios: {sum(load_scenario_dict[scen]['prob'] for scen in load_scenario_dict):.6f}")
     print(f'Number of considered scenarios: {len(load_scenario_names)}')
 
-    chokepoints = {
-        # Bottlenecks for storage at location 5
-        'Cap_S[loc5,com1_store_com1_in_stored,0]',
-        'Cap_P[loc5,com1_process,0]',
-        'Cap_P[loc5,com1_store,0]',
-        'Cap_P[loc5,com1_store_discharge,0]',
-        'Cap_P[loc5,sell com1,0]',
-        'X_S[loc5,com1_store_com1_in_stored,0]',
-        'X_P[loc5,com1_process,0]',
-        'X_P[loc5,com1_store,0]',
-        'X_P[loc5,com1_store_discharge,0]',
-        'X_P[loc5,sell com1,0]',
-
-        # Bottlenecks for storage at location 4
-        'Cap_S[loc4,com1_store_com1_in_stored,0]',
-        'Cap_P[loc4,com1_process,0]',
-        'Cap_P[loc4,com1_store,0]',
-        'Cap_P[loc4,com1_store_discharge,0]',
-        'Cap_P[loc4,com1_loc4_send,0]',
-        'X_S[loc4,com1_store_com1_in_stored,0]',
-        'X_P[loc4,com1_process,0]',
-        'X_P[loc4,com1_store,0]',
-        'X_P[loc4,com1_store_discharge,0]',
-        'X_P[loc4,com1_loc4_send,0]',
-
-        # Bottlenecks for transport capacity between location 7 and 5
-        'Cap_P[loc7,com1_loc7_send,0]',
-        'Cap_F[loc7,loc5,truck75,0]',
-        'Cap_P[loc5,com1_receive_loc7,0]',
-    }
-
     first_stage_variables = ('X_P', 'X_S', 'X_F', 'Cap_P', 'Cap_S', 'Cap_F')
     options = {"solver": "gurobi"}
     solver_options = {
@@ -479,23 +403,18 @@ if __name__ == '__main__':
     scenario_creator_kwargs = {'scenario_dict': load_scenario_dict,
                                # 'epsilon': fill_rate,
                                'fsv': first_stage_variables,
-                               'initial_design_dict': load_initial_design_dict,
-                               'chokepoints': chokepoints,
-                               'fix_binaries': True}
+                               'initial_design_dict': load_initial_design_dict}
 
-    model_start_time = time.time()
+    start_time = time.time()
     ef_UI = ExtensiveForm(options, load_scenario_names, design_scenario_creator,
                           scenario_creator_kwargs=scenario_creator_kwargs)
-    model_end_time = time.time()
-
-    solver_start_time = time.time()
     results = ef_UI.solve_extensive_form(solver_options=solver_options)
-    solver_end_time = time.time()
+    end_time = time.time()
 
     exCost_UI = ef_UI.get_objective_value()
     ssoln_UI = ef_UI.get_root_solution()
 
-    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl", "wb") as file:
+    with open(f"ssoln_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_global_from_ncl.pkl", "wb") as file:
         pickle.dump(ssoln_UI, file)
 
     output_dict = dict()
@@ -506,7 +425,7 @@ if __name__ == '__main__':
         obj_dict = {'objective': model_obj[i]() for i in model_obj.keys()}
         output_dict[scen] = {**vars_dict, **obj_dict}
 
-    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl', 'wb') as file:
+    with open(f'output_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_global_from_ncl.pkl', 'wb') as file:
         pickle.dump(output_dict, file)
 
     exPen, exBacklogPen = 0, 0
@@ -519,14 +438,12 @@ if __name__ == '__main__':
 
     print(f'Total Expected Cost considering disruptions: {exCost_UI:.4f}')
     print(f'First Stage Cost: {fsc:.4f}')
-    print(f'Model building time: {model_start_time - model_end_time:.4f} seconds')
-    print(f'Solver time: {solver_start_time - solver_end_time:.4f} seconds')
+    print(f'Execution time: {start_time - end_time:.4f} seconds')
 
     final_results_dict = {'Expected Cost UI': exCost_UI,
                           'First Stage Cost': fsc,
                           'Total Expected Backlog Cost': exBacklogPen + exPen,
-                          'Model Building Time': model_start_time - model_end_time,
-                          'Solver Time': solver_start_time - solver_end_time}
+                          'Execution Time': end_time - start_time}
 
-    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl_local.pkl", 'wb') as file:
+    with open(f"results_{len(load_scenario_names)}_{int(fill_rate * 10):02d}_cl2_global_from_ncl.pkl", 'wb') as file:
         pickle.dump(final_results_dict, file)
